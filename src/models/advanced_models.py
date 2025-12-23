@@ -14,7 +14,7 @@ All models are highly parameterized for optimal research results.
 """
 
 import tensorflow as tf
-from tensorflow import keras
+import keras
 from tensorflow.keras import layers, Model, regularizers
 from tensorflow.keras.layers import (
     Input, LSTM, GRU, Dense, Dropout, BatchNormalization,
@@ -76,12 +76,17 @@ class PositionalEncoding(layers.Layer):
         pe[:, 0::2] = np.sin(position * div_term)
         pe[:, 1::2] = np.cos(position * div_term)
         
-        self.pe = tf.constant(pe[np.newaxis, :, :], dtype=tf.float32)
+        self.pe = self.add_weight(
+            name='positional_encoding',
+            shape=(1, self.max_len, self.d_model),
+            initializer=tf.constant_initializer(pe[np.newaxis, :, :]),
+            trainable=False
+        )
         super().build(input_shape)
         
     def call(self, x):
         seq_len = tf.shape(x)[1]
-        return x + self.pe[:, :seq_len, :]
+        return x + tf.cast(self.pe[:, :seq_len, :], x.dtype)
     
     def get_config(self):
         config = super().get_config()
