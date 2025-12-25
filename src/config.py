@@ -12,7 +12,7 @@ from typing import List, Tuple
 # PATHS
 # ==============================
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_PATH = "/home/draxxy/Downloads/archive/Price_Agriculture_commodities_Week.csv"
+DATA_PATH = os.path.join(BASE_DIR, "data", "daily_prices.csv")
 PROCESSED_DATA_DIR = os.path.join(BASE_DIR, "data/processed")
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")

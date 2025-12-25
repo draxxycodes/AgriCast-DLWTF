@@ -106,10 +106,15 @@ def train_statistical_model(model_name, daily_df, config):
     print(f"{'='*50}")
     
     y = daily_df['modal_price'].values
+    n_samples = len(y)
     
     if model_name == 'arima':
         from models import ARIMAModel
-        model = ARIMAModel(seasonal=True, m=7)
+        # Use non-seasonal for small datasets (< 2 * seasonal_period)
+        use_seasonal = n_samples >= 14  # Need at least 2 weeks for weekly seasonality
+        model = ARIMAModel(seasonal=use_seasonal, m=7 if use_seasonal else 1)
+        if not use_seasonal:
+            print(f"⚠ Dataset too small ({n_samples} samples), using non-seasonal ARIMA")
         result = model.fit(y)
         print(f"✓ Order: {result['order']}, AIC: {result['aic']:.2f}")
         
