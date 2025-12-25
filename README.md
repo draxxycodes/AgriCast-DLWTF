@@ -23,10 +23,6 @@
 
 ## 📊 Performance Overview
 
-<p align="center">
-  <img src="outputs/figures/comparison/01_metrics_bars.png" alt="Model Metrics Comparison" width="100%"/>
-</p>
-
 ### 🏆 Model Leaderboard
 
 | Rank | Model | RMSE ↓ | MAE | MAPE | R² Score | Parameters |
@@ -45,6 +41,111 @@
 > **📈 Best Overall**: TCN achieves the lowest RMSE (634.74) and highest R² (0.469)  
 > **🎯 Best MAPE**: WaveNet has the best percentage error (69.43%)  
 > **⚡ Most Efficient**: TFT achieves competitive results with only 14.2M parameters
+
+<p align="center">
+  <img src="outputs/figures/comparison/01_metrics_bars.png" alt="Model Metrics Comparison" width="100%"/>
+</p>
+
+---
+
+## 📦 Dataset: Multi-Source Agricultural Price Compilation
+
+### Overview
+
+We created a **comprehensive multi-source dataset** by combining **6 different agricultural price datasets** from various sources spanning **32 years (1992-2024)**. This unified dataset provides diverse price patterns across multiple commodities and geographical regions.
+
+### Dataset Sources & Composition
+
+| # | Source | Dataset | Records | Size | Coverage |
+|:-:|--------|---------|--------:|-----:|----------|
+| 1 | **data.gov.in** | Price_Agriculture_commodities_Week.csv | 23,094 | ~3 MB | India - Weekly commodity prices |
+| 2 | **Kaggle** | WFP India Food Prices (csafrit2) | ~15,000 | 1.7 MB | India - UN World Food Programme |
+| 3 | **Kaggle** | Vegetables & Fruits Time Series (ramkrijal) | ~8,000 | 1.4 MB | Nepal - Kalimati Market |
+| 4 | **Kaggle** | WFP Global Food Prices (jocelyndumlao) | ~50,000 | 228 KB | Global - 80+ countries |
+| 5 | **Kaggle** | Commodity Prices 1960-2021 (elmoallistair) | ~3,000 | 5 KB | Global - Historical commodities |
+| 6 | **Kaggle** | Crop Price Prediction (varshitanalluri) | ~2,000 | 68 KB | India - Crop yields & prices |
+
+### Data Processing Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    RAW DATA SOURCES (6 Datasets)                    │
+│    India Weekly + WFP India + Nepal Veg + WFP Global + Historical   │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     STANDARDIZATION (prepare_data.py)               │
+│  • Normalize column names (date, price, commodity, source)          │
+│  • Convert dates to datetime format                                 │
+│  • Clean price values (remove nulls, non-numeric)                   │
+│  • Lowercase commodity names                                        │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     COMBINATION & CLEANING                          │
+│  • Concatenate all datasets                                         │
+│  • Remove outliers (1st-99th percentile)                            │
+│  • Combined: ~100,000+ raw records                                  │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     DAILY AGGREGATION                               │
+│  • Group by date                                                    │
+│  • Calculate mean price per day                                     │
+│  • Track record count for each day                                  │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     FINAL DATASET                                   │
+│  daily_prices.csv: 7,015 records | 220 KB | 1992-2024               │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Final Dataset Statistics
+
+| Property | Value |
+|----------|-------|
+| **File** | `data/daily_prices.csv` |
+| **Records** | 7,015 daily price points |
+| **File Size** | 220 KB |
+| **Date Range** | January 1992 → January 2024 |
+| **Time Span** | 32 years of historical data |
+| **Columns** | `date`, `price`, `n_records` |
+| **Combined Raw Records** | 42 MB (combined_all.csv) |
+
+### Feature Engineering (10 Features)
+
+During training, we engineer the following features from raw prices:
+
+| Feature | Type | Description |
+|---------|------|-------------|
+| `price` | Raw | Daily aggregated modal price |
+| `log_price` | Transform | Log-transformed price (np.log1p) |
+| `pct_change` | Derived | Day-over-day percentage change |
+| `ma_7` | Rolling | 7-day moving average |
+| `ma_14` | Rolling | 14-day moving average |
+| `ma_30` | Rolling | 30-day moving average |
+| `std_7` | Rolling | 7-day rolling standard deviation |
+| `std_14` | Rolling | 14-day rolling standard deviation |
+| `std_30` | Rolling | 30-day rolling standard deviation |
+| `momentum` | Derived | Price deviation from MA_7 |
+
+### Data Split
+
+```
+Total: 7,015 days
+├── Training:   70% (4,910 samples) │████████████████████░░░░░░░░░│
+├── Validation: 15% (1,052 samples) │░░░░░░░░░░░░░░░░░░░░████░░░░░│
+└── Testing:    15% (1,053 samples) │░░░░░░░░░░░░░░░░░░░░░░░░████░│
+
+Sequence Length: 60 days (lookback window)
+Forecast Horizon: 1 day (next-day prediction)
+```
+
 
 ---
 
@@ -476,39 +577,7 @@ optimizer = keras.optimizers.AdamW(
 
 ---
 
-## 📊 Dataset
-
-### Indian Agriculture Commodity Price Dataset
-
-| Property | Value |
-|----------|-------|
-| **Source** | Kaggle / data.gov.in |
-| **Records** | 23,094 weekly price records |
-| **Time Range** | Multi-year historical data |
-| **Commodities** | Multiple agricultural products |
-
-### Features Used
-
-| Feature | Type | Description |
-|---------|------|-------------|
-| `price` | Target | Modal price (₹) |
-| `log_price` | Engineered | Log-transformed price |
-| `pct_change` | Engineered | Daily percentage change |
-| `ma_7`, `ma_14`, `ma_30` | Engineered | Moving averages |
-| `std_7`, `std_14`, `std_30` | Engineered | Rolling std deviation |
-| `momentum` | Engineered | Price - MA_7 |
-
-### Data Split
-
-```
-Training:   70% │████████████████████░░░░░░░░░│
-Validation: 15% │░░░░░░░░░░░░░░░░░░░░████░░░░░│
-Testing:    15% │░░░░░░░░░░░░░░░░░░░░░░░░████░│
-```
-
----
-
-## 📈 Evaluation Metrics
+##  Evaluation Metrics
 
 | Metric | Formula | Interpretation |
 |--------|---------|----------------|
