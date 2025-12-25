@@ -153,8 +153,11 @@ Forecast Horizon: 1 day (next-day prediction)
 
 ### Deep Learning Models (10 Architectures, 350M+ Total Parameters)
 
-<details>
-<summary><b>🔵 TCN (Temporal Convolutional Network) - Best Model</b></summary>
+---
+
+### 🥇 TCN (Temporal Convolutional Network) - Best Model
+
+**RMSE: 634.74 | R²: 0.469 | Parameters: 29.6M**
 
 ```
 Architecture:
@@ -169,14 +172,28 @@ Architecture:
 ├── Global Average Pooling
 ├── Dense (1024 → 512 → 256 → 64)
 └── Output (1 value)
-
-Parameters: 29,608,321
-Key Features: Dilated convolutions, causal padding, residual blocks
 ```
-</details>
 
-<details>
-<summary><b>🟢 WaveNet - Audio-Inspired Architecture</b></summary>
+**Key Features:** Dilated convolutions capture long-range dependencies efficiently. Causal padding ensures no future information leakage. Residual connections enable training of very deep networks.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/tcn/predictions.png" alt="TCN Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/tcn/training_curves.png" alt="TCN Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+<img src="outputs/figures/tcn/error_analysis.png" alt="TCN Error Analysis" width="100%"/>
+
+---
+
+### 🥈 WaveNet - Audio-Inspired Architecture
+
+**RMSE: 701.54 | R²: 0.351 | Parameters: 32.1M**
 
 ```
 Architecture:
@@ -192,14 +209,28 @@ Architecture:
 ├── ReLU → Conv1D (512) → Conv1D (256)
 ├── Global Average Pooling
 └── Dense (512 → 256 → 64 → 1)
-
-Parameters: 32,066,689
-Key Features: Gated activations, skip connections, multi-scale patterns
 ```
-</details>
 
-<details>
-<summary><b>🟡 GRU (Gated Recurrent Unit) - Residual Architecture</b></summary>
+**Key Features:** Gated activations from audio synthesis. Skip connections aggregate multi-scale temporal patterns. Originally designed for raw audio generation.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/wavenet/predictions.png" alt="WaveNet Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/wavenet/training_curves.png" alt="WaveNet Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+<img src="outputs/figures/wavenet/error_analysis.png" alt="WaveNet Error Analysis" width="100%"/>
+
+---
+
+### 🥉 GRU (Gated Recurrent Unit) - Residual Architecture
+
+**RMSE: 710.60 | R²: 0.335 | Parameters: 68.0M**
 
 ```
 Architecture:
@@ -213,14 +244,66 @@ Architecture:
 ├── Multi-Head Attention (16 heads, key_dim=80)
 ├── Global Average Pooling
 └── Dense (1024 → 512 → 256 → 128 → 1)
-
-Parameters: 67,968,769
-Key Features: Bidirectional processing, residual connections, attention
 ```
-</details>
 
-<details>
-<summary><b>🔴 Transformer - Pre-Norm Architecture</b></summary>
+**Key Features:** Bidirectional processing captures past and future context. Deep residual connections prevent vanishing gradients. Attention layer focuses on important time steps.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/gru/predictions.png" alt="GRU Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/gru/training_curves.png" alt="GRU Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+<img src="outputs/figures/gru/error_analysis.png" alt="GRU Error Analysis" width="100%"/>
+
+---
+
+### 4️⃣ Attention - Pure Self-Attention Network
+
+**RMSE: 714.24 | R²: 0.328 | Parameters: 28.6M**
+
+```
+Architecture:
+├── Input Layer (60 timesteps × 10 features)
+├── Dense Embedding (384 dimensions)
+├── Learnable Positional Encoding
+├── 12× Pure Attention Blocks (Pre-LayerNorm)
+│   ├── Pre-LayerNorm (prevents gradient explosion)
+│   ├── Multi-Head Self-Attention (12 heads, key_dim=64)
+│   ├── Residual Connection
+│   ├── Pre-LayerNorm
+│   ├── Feed-Forward Network (384 → 1536 → 384)
+│   └── Residual Connection
+├── Final Layer Normalization
+├── Global Average Pooling
+└── Dense (384 → 128 → 64 → 1)
+```
+
+**Key Features:** Pre-normalization ensures gradient stability. No recurrence - fully parallelizable. Self-attention captures global dependencies.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/attention/predictions.png" alt="Attention Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/attention/training_curves.png" alt="Attention Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+<img src="outputs/figures/attention/error_analysis.png" alt="Attention Error Analysis" width="100%"/>
+
+---
+
+### 5️⃣ Transformer - Pre-Norm Architecture
+
+**RMSE: 721.62 | R²: 0.314 | Parameters: 50.8M**
 
 ```
 Architecture:
@@ -237,14 +320,28 @@ Architecture:
 ├── Final Layer Normalization
 ├── Global Average Pooling
 └── Dense (512 → 256 → 64 → 1)
-
-Parameters: 50,848,129
-Key Features: Pre-normalization, gradient stability, self-attention
 ```
-</details>
 
-<details>
-<summary><b>🟣 LSTM (Long Short-Term Memory) - Multi-Head Attention</b></summary>
+**Key Features:** Industry-standard Transformer architecture. Pre-normalization prevents NaN gradients. Larger FFN for increased model capacity.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/transformer/predictions.png" alt="Transformer Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/transformer/training_curves.png" alt="Transformer Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+<img src="outputs/figures/transformer/error_analysis.png" alt="Transformer Error Analysis" width="100%"/>
+
+---
+
+### 6️⃣ LSTM (Long Short-Term Memory) - Multi-Head Attention
+
+**RMSE: 724.23 | R²: 0.309 | Parameters: 40.6M**
 
 ```
 Architecture:
@@ -257,14 +354,28 @@ Architecture:
 ├── 2× Multi-Head Attention (16 heads + 8 heads)
 ├── Global Average Pooling
 └── Dense (1024 → 512 → 256 → 64 → 1)
-
-Parameters: 40,568,065
-Key Features: Deep stacked LSTMs, dual attention, bidirectional
 ```
-</details>
 
-<details>
-<summary><b>⚪ TFT (Temporal Fusion Transformer)</b></summary>
+**Key Features:** Classic LSTM with modern enhancements. Dual attention layers for temporal focus. Deep stacking with layer normalization.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/lstm/predictions.png" alt="LSTM Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/lstm/training_curves.png" alt="LSTM Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+<img src="outputs/figures/lstm/error_analysis.png" alt="LSTM Error Analysis" width="100%"/>
+
+---
+
+### 7️⃣ TFT (Temporal Fusion Transformer)
+
+**RMSE: 770.05 | R²: 0.219 | Parameters: 14.2M**
 
 ```
 Architecture:
@@ -277,23 +388,124 @@ Architecture:
 ├── Gated Skip Connection
 ├── Global Average Pooling
 └── Dense (512 → 256 → 64 → 1)
-
-Parameters: 14,206,977
-Key Features: Variable selection, gating mechanisms, interpretability
 ```
-</details>
 
-<details>
-<summary><b>🟤 Other Models (ConvLSTM, DenseNN, N-BEATS, Attention)</b></summary>
+**Key Features:** Variable selection learns feature importance. Gating mechanisms control information flow. Most efficient model (best R²/params ratio).
 
-| Model | Architecture Highlights | Parameters |
-|-------|------------------------|------------|
-| **Attention** | 12× Pure Attention Blocks, Pre-Norm, 12 heads | 28.6M |
-| **ConvLSTM** | 6× Conv1D + 4× Bidirectional LSTM hybrid | 13.1M |
-| **DenseNN** | 11× Dense layers (2048→256), deep MLP | 14.6M |
-| **N-BEATS** | 12× Basis expansion blocks, backcast/forecast | 29.6M |
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/tft/predictions.png" alt="TFT Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/tft/training_curves.png" alt="TFT Training" width="100%"/>
+</td>
+</tr>
+</table>
 
-</details>
+<img src="outputs/figures/tft/error_analysis.png" alt="TFT Error Analysis" width="100%"/>
+
+---
+
+### 8️⃣ ConvLSTM - Convolutional LSTM Hybrid
+
+**RMSE: 886.83 | R²: -0.036 | Parameters: 13.1M**
+
+```
+Architecture:
+├── Input Layer (60 timesteps × 10 features)
+├── 6× Conv1D Feature Extraction (256 → 384 → 512 → 512 → 384 → 256)
+│   ├── Conv1D (kernel=3, padding='same')
+│   └── BatchNormalization + ReLU
+├── MaxPooling1D (factor=2)
+├── 4× Bidirectional LSTM (512 → 384 → 256 → 128)
+├── Dense (512 → 256 → 128 → 32)
+└── Output (1 value)
+```
+
+**Key Features:** Convolutional layers extract local patterns. LSTM captures temporal dependencies. Hybrid approach combines CNN and RNN strengths.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/convlstm/predictions.png" alt="ConvLSTM Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/convlstm/training_curves.png" alt="ConvLSTM Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+<img src="outputs/figures/convlstm/error_analysis.png" alt="ConvLSTM Error Analysis" width="100%"/>
+
+---
+
+### 9️⃣ DenseNN - Deep Fully Connected Network
+
+**RMSE: 943.09 | R²: -0.172 | Parameters: 14.6M**
+
+```
+Architecture:
+├── Input Layer (60 timesteps × 10 features)
+├── Flatten (600 features)
+├── LayerNormalization
+├── 11× Dense Layers (2048 → 2048 → 1536 → 1536 → 1024 → 1024 → 512 → 512 → 256 → 256 → 128)
+│   ├── Dense (GELU activation)
+│   ├── Dropout (0.15)
+│   └── BatchNormalization
+├── Dense (64)
+└── Output (1 value)
+```
+
+**Key Features:** Pure MLP baseline for comparison. Very deep with aggressive regularization. No temporal inductive bias.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/densenn/predictions.png" alt="DenseNN Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/densenn/training_curves.png" alt="DenseNN Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+<img src="outputs/figures/densenn/error_analysis.png" alt="DenseNN Error Analysis" width="100%"/>
+
+---
+
+### 🔟 N-BEATS (Neural Basis Expansion)
+
+**RMSE: 1111.84 | R²: -0.629 | Parameters: 29.6M**
+
+```
+Architecture:
+├── Input Layer (60 timesteps × 10 features)
+├── Flatten
+├── LayerNormalization
+├── 12× N-BEATS Blocks
+│   ├── Dense (1024 → 1024 → 512 → 256)
+│   ├── Forecast Branch (predict future)
+│   └── Backcast Branch (reconstruct past, subtract residual)
+└── Sum of all Forecast outputs
+```
+
+**Key Features:** Interpretable time series decomposition. Backcast/forecast architecture. Basis expansion for trend/seasonality.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/nbeats/predictions.png" alt="NBEATS Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/nbeats/training_curves.png" alt="NBEATS Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+<img src="outputs/figures/nbeats/error_analysis.png" alt="NBEATS Error Analysis" width="100%"/>
+
+
 
 ---
 
@@ -341,80 +553,9 @@ Key Features: Variable selection, gating mechanisms, interpretability
   <img src="outputs/figures/comparison/11_efficiency_plot.png" alt="Efficiency Plot" width="80%"/>
 </p>
 
----
-
-## 📂 Individual Model Results
-
-<details>
-<summary><b>🏆 TCN - Best Performing Model</b></summary>
-
-<table>
-<tr>
-<td width="50%">
-<img src="outputs/figures/tcn/predictions.png" alt="TCN Predictions" width="100%"/>
-</td>
-<td width="50%">
-<img src="outputs/figures/tcn/training_curves.png" alt="TCN Training" width="100%"/>
-</td>
-</tr>
-</table>
-
-<img src="outputs/figures/tcn/error_analysis.png" alt="TCN Error Analysis" width="100%"/>
-
-</details>
-
-<details>
-<summary><b>🥈 WaveNet - Second Best</b></summary>
-
-<table>
-<tr>
-<td width="50%">
-<img src="outputs/figures/wavenet/predictions.png" alt="WaveNet Predictions" width="100%"/>
-</td>
-<td width="50%">
-<img src="outputs/figures/wavenet/training_curves.png" alt="WaveNet Training" width="100%"/>
-</td>
-</tr>
-</table>
-
-<img src="outputs/figures/wavenet/error_analysis.png" alt="WaveNet Error Analysis" width="100%"/>
-
-</details>
-
-<details>
-<summary><b>🥉 GRU - Third Best</b></summary>
-
-<table>
-<tr>
-<td width="50%">
-<img src="outputs/figures/gru/predictions.png" alt="GRU Predictions" width="100%"/>
-</td>
-<td width="50%">
-<img src="outputs/figures/gru/training_curves.png" alt="GRU Training" width="100%"/>
-</td>
-</tr>
-</table>
-
-<img src="outputs/figures/gru/error_analysis.png" alt="GRU Error Analysis" width="100%"/>
-
-</details>
-
-<details>
-<summary><b>View All 10 Models</b></summary>
-
-| Model | Predictions | Training | Error Analysis |
-|-------|-------------|----------|----------------|
-| Transformer | [View](outputs/figures/transformer/predictions.png) | [View](outputs/figures/transformer/training_curves.png) | [View](outputs/figures/transformer/error_analysis.png) |
-| LSTM | [View](outputs/figures/lstm/predictions.png) | [View](outputs/figures/lstm/training_curves.png) | [View](outputs/figures/lstm/error_analysis.png) |
-| Attention | [View](outputs/figures/attention/predictions.png) | [View](outputs/figures/attention/training_curves.png) | [View](outputs/figures/attention/error_analysis.png) |
-| TFT | [View](outputs/figures/tft/predictions.png) | [View](outputs/figures/tft/training_curves.png) | [View](outputs/figures/tft/error_analysis.png) |
-| ConvLSTM | [View](outputs/figures/convlstm/predictions.png) | [View](outputs/figures/convlstm/training_curves.png) | [View](outputs/figures/convlstm/error_analysis.png) |
-| DenseNN | [View](outputs/figures/densenn/predictions.png) | [View](outputs/figures/densenn/training_curves.png) | [View](outputs/figures/densenn/error_analysis.png) |
-| N-BEATS | [View](outputs/figures/nbeats/predictions.png) | [View](outputs/figures/nbeats/training_curves.png) | [View](outputs/figures/nbeats/error_analysis.png) |
-
-</details>
 
 ---
+
 
 ## 🏗️ Project Structure
 
