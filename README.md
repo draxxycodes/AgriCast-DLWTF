@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="outputs/figures/comparison/05_radar_chart.png" alt="AgriCast Logo" width="600"/>
-</p>
-
 <h1 align="center">🌾 AgriCast: Agricultural Commodity Price Prediction</h1>
 
 <p align="center">
@@ -17,6 +13,10 @@
 
 <p align="center">
   An <b>industry-grade intelligent system</b> for predicting agricultural commodity prices using <b>10 advanced deep learning architectures</b> including LSTM, GRU, Transformer, TCN, WaveNet, N-BEATS, TFT, ConvLSTM, DenseNN, and Attention models with <b>350+ million total trainable parameters</b>.
+</p>
+
+<p align="center">
+  <img src="outputs/figures/comparison/05_radar_chart.png" alt="Model Performance Radar Chart" width="600"/>
 </p>
 
 ---
@@ -647,8 +647,4 @@ This project is for educational purposes as part of the CSE 3793 course.
 
 <p align="center">
   Made with ❤️ using TensorFlow & Keras
-</p>
-
-<p align="center">
-  <img src="outputs/figures/comparison/12_mae_vs_rmse.png" alt="MAE vs RMSE" width="60%"/>
 </p>
