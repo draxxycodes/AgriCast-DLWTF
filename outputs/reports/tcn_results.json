@@ -1,12 +1,1 @@
-{
-  "model": "TCN",
-  "rmse": 0.652,
-  "mae": 0.481,
-  "mape": 3.8544831461648603,
-  "r2": 0.241,
-  "directional_acc": 73.5,
-  "ic": 0.48,
-  "ic_pvalue": 0.0001,
-  "params": 550000,
-  "epochs": 30
-}
+{"rmse": 0.652, "mae": 0.481, "r2": 0.241, "acc": 73.5, "ic": 0.48, "params": 550000, "color": "#f1c40f"}

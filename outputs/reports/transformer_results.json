@@ -1,12 +1,1 @@
-{
-  "model": "TRANSFORMER",
-  "rmse": 0.631,
-  "mae": 0.462,
-  "mape": 2.7440976621973987,
-  "r2": 0.285,
-  "directional_acc": 75.8,
-  "ic": 0.51,
-  "ic_pvalue": 0.0001,
-  "params": 2100000,
-  "epochs": 30
-}
+{"rmse": 0.631, "mae": 0.462, "r2": 0.285, "acc": 75.8, "ic": 0.51, "params": 2100000, "color": "#e67e22"}

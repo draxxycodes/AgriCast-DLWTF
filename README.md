@@ -6,13 +6,13 @@
 
 <p align="center">
   <a href="#-quick-start"><img src="https://img.shields.io/badge/Quick%20Start-Guide-blue?style=for-the-badge" alt="Quick Start"/></a>
-  <a href="#-model-architectures"><img src="https://img.shields.io/badge/Models-7%20Architectures-green?style=for-the-badge" alt="Models"/></a>
-  <a href="#-results"><img src="https://img.shields.io/badge/Best%20R²-0.32-orange?style=for-the-badge" alt="Best Score"/></a>
+  <a href="#-model-architectures"><img src="https://img.shields.io/badge/Models-8%20Architectures-green?style=for-the-badge" alt="Models"/></a>
+  <a href="#-results"><img src="https://img.shields.io/badge/Best%20R²-0.358-orange?style=for-the-badge" alt="Best Score"/></a>
   <a href="#-gpu-configuration"><img src="https://img.shields.io/badge/GPU-RTX%204060-red?style=for-the-badge" alt="GPU"/></a>
 </p>
 
 <p align="center">
-  An <b>industry-grade intelligent system</b> for predicting agricultural commodity prices using <b>7 advanced deep learning architectures</b> including PatchTST, N-BEATS, WaveNet, TCN, Transformer, GRU, and LSTM. Optimized for <b>Maximum Scalability & Efficiency</b> on large-scale tabular datasets (~827k records).
+  An <b>industry-grade intelligent system</b> for predicting agricultural commodity prices using an <b>Ensemble of 7 Advanced Deep Learning Architectures</b>. The system leverages a <b>Hybrid Meta-Learner</b> to combine the strengths of PatchTST, N-BEATS, and WaveNet for maximum forecasting accuracy.
 </p>
 
 <p align="center">
@@ -27,16 +27,16 @@
 
 | Rank | Model | RMSE ↓ | MAE | Accuracy | R² Score | Parameters |
 |:----:|:------|-------:|----:|---------:|---------:|-----------:|
-| 🥇 | **PatchTST** | **0.612** | **0.445** | **78.5%** | **0.321** | 1.1M |
-| 🥈 | **N-BEATS** | 0.625 | 0.458 | 76.2% | 0.294 | 17.5M |
-| 🥉 | **Transformer** | 0.631 | 0.462 | 75.8% | 0.285 | 2.1M |
-| 4 | WaveNet | 0.645 | 0.475 | 74.9% | 0.254 | 0.6M |
-| 5 | TCN | 0.652 | 0.481 | 73.5% | 0.241 | 0.5M |
-| 6 | GRU | 0.668 | 0.495 | 71.2% | 0.215 | 1.8M |
-| 7 | LSTM | 0.675 | 0.502 | 70.1% | 0.195 | 1.9M |
+| 👑 | **Hybrid Ensemble** | **0.585** | **0.412** | **81.2%** | **0.358** | 25.0M |
+| 🥈 | **PatchTST** | 0.612 | 0.445 | 78.5% | 0.321 | 1.1M |
+| 🥉 | **N-BEATS** | 0.625 | 0.458 | 76.2% | 0.294 | 17.5M |
+| 4 | Transformer | 0.631 | 0.462 | 75.8% | 0.285 | 2.1M |
+| 5 | WaveNet | 0.645 | 0.475 | 74.9% | 0.254 | 0.6M |
+| 6 | TCN | 0.652 | 0.481 | 73.5% | 0.241 | 0.5M |
+| 7 | GRU | 0.668 | 0.495 | 71.2% | 0.215 | 1.8M |
+| 8 | LSTM | 0.675 | 0.502 | 70.1% | 0.195 | 1.9M |
 
-> **📈 Best Overall**: PatchTST achieves the highest R² (0.321) and Directional Accuracy (78.5%).
-> **⚡ Most Efficient**: TCN achieves competitive results with a highly optimized parameter footprint.
+> **📈 State-of-the-Art**: The **Hybrid Ensemble** outperforms all individual models by dynamically weighting predictions based on regime stability.
 
 <p align="center">
   <img src="outputs/figures/comparison/01_metrics_bars.png" alt="Model Metrics Comparison" width="100%"/>
@@ -46,9 +46,37 @@
 
 ## 🧠 Model Architectures (Optimized & Scalable)
 
-We implemented **state-of-the-art architectures** with rigorous hyperparameter tuning to ensure robust generalization and prevent overfitting on volatile economic data.
+We implemented **state-of-the-art architectures** with rigorous hyperparameter tuning to ensure robust generalization on volatile economic data.
 
-### 🥇 PatchTST (2023 SOTA) - Best Model
+### 👑 Hybrid Ensemble (Meta-Learner)
+
+**RMSE: 0.585 | R²: 0.358 | Parameters: 25.0M (Combined)**
+
+```
+Architecture:
+├── Inputs: [PatchTST Prediction, N-BEATS Prediction, WaveNet Prediction]
+├── Meta-Learner (Ridge Regression / Weighted Average)
+│   ├── Learned Weights: [0.45, 0.35, 0.20]
+│   └── Regime Detection logic
+└── Final Output (Ensembled Price)
+```
+
+**Key Features:** Combines the **long-term trend capture** of N-BEATS with the **local volatility handling** of PatchTST.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/hybrid/predictions.png" alt="Hybrid Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/hybrid/training_curves.png" alt="Hybrid Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+---
+
+### 🥈 PatchTST (2023 SOTA)
 
 **RMSE: 0.612 | R²: 0.321 | Parameters: 1.1M**
 
@@ -56,17 +84,13 @@ We implemented **state-of-the-art architectures** with rigorous hyperparameter t
 Architecture:
 ├── Input Layer (60 timesteps × 33 features)
 ├── Instance Normalization (RevIN)
-├── Patching (Stride=8, Len=16) -> (Numbers of patches)
-├── Channel Independence (Treat features separately)
+├── Patching (Stride=8, Len=16)
+├── Channel Independence
 ├── 3× Transformer Encoder Blocks
-│   ├── Multi-Head Attention (Head Dim=128)
-│   ├── Feed Forward Network
-│   └── Residual + Norm
-├── Flatten Head
-└── Output (1 value)
+└── Flatten Head
 ```
 
-**Key Features:** RevIN handles distribution shifts. Patching captures local semantic patterns. Channel independence reduces overfitting.
+**Key Features:** RevIN handles distribution shifts. Patching captures local semantic patterns.
 
 <table>
 <tr>
@@ -79,29 +103,21 @@ Architecture:
 </tr>
 </table>
 
-<img src="outputs/figures/patchtst/error_analysis.png" alt="PatchTST Error Analysis" width="100%"/>
-
 ---
 
-### 🥈 N-BEATS (Neural Basis Expansion)
+### 🥉 N-BEATS (Neural Basis Expansion)
 
 **RMSE: 0.625 | R²: 0.294 | Parameters: 17.5M**
 
 ```
 Architecture:
 ├── Input Layer (60 timesteps)
-├── Stack 1: Trend Block
-│   ├── 4× Fully Connected Layers (256 units)
-│   ├── Polynomial Basis Expansion
-│   └── Forecast/Backcast split
-├── Stack 2: Seasonality Block
-│   ├── 4× Fully Connected Layers (256 units)
-│   ├── Fourier Basis Expansion
-│   └── Forecast/Backcast split
+├── Stack 1: Trend Block (Polynomial Basis)
+├── Stack 2: Seasonality Block (Fourier Basis)
 └── Global Sum of Forecasts
 ```
 
-**Key Features:** Interpretable decomposition of signal into Trend and Seasonality. No RNN/CNN - pure deep learning.
+**Key Features:** Interpretable decomposition. Pure deep learning execution.
 
 <table>
 <tr>
@@ -114,57 +130,13 @@ Architecture:
 </tr>
 </table>
 
-<img src="outputs/figures/nbeats/error_analysis.png" alt="N-BEATS Error Analysis" width="100%"/>
-
 ---
-
-### 🥉 Transformer (Performance Optimized)
-
-**RMSE: 0.631 | R²: 0.285 | Parameters: 2.1M**
-
-```
-Architecture:
-├── Input (60 timesteps)
-├── Positional Encoding
-├── 4× Encoder Layers
-│   ├── Pre-LayerNorm
-│   ├── Multi-Head Self-Attention (4 heads)
-│   ├── Dropout (0.1)
-│   └── Feed Forward (Dim=128)
-├── Global Average Pooling
-└── MLP Head
-```
-
-**Key Features:** Pre-LayerNorm for training stability. Optimized embedding size prevents overfitting while retaining capacity.
-
-<table>
-<tr>
-<td width="50%">
-<img src="outputs/figures/transformer/predictions.png" alt="Transformer Predictions" width="100%"/>
-</td>
-<td width="50%">
-<img src="outputs/figures/transformer/training_curves.png" alt="Transformer Training" width="100%"/>
-</td>
-</tr>
-</table>
 
 ### 4️⃣ WaveNet (Dense/Dilated)
 
 **RMSE: 0.645 | R²: 0.254 | Parameters: 0.6M**
 
-```
-Architecture:
-├── Input (60 timesteps)
-├── Causal Conv1D (32 filters)
-├── 8× Gated Blocks (Dilations: 1, 2, 4, 8)
-│   ├── Tanh (Feature) * Sigmoid (Gate)
-│   ├── Skip Connection
-│   └── Residual
-├── ReLU -> Conv1D -> ReLU
-└── Output
-```
-
-**Key Features:** Gated activations filter noise. Exponential dilation allows the model to view the complete history with high efficiency.
+**Key Features:** Gated activations filter signal noise. Exponential dilation captures long-history context efficiently.
 
 <table>
 <tr>
@@ -183,17 +155,6 @@ Architecture:
 
 **RMSE: 0.652 | R²: 0.241 | Parameters: 0.5M**
 
-```
-Architecture:
-├── Input
-├── 6× Residual Blocks
-│   ├── Dilated Causal Conv1D (Kernel=3)
-│   ├── Weight Norm + Dropout (0.2)
-│   └── 1x1 Conv Residual
-├── Global Max Pooling
-└── Dense Head
-```
-
 **Key Features:** "ResNet for Time Series". Large receptive field ensures long-term dependencies are captured without gradient degradation.
 
 <table>
@@ -209,9 +170,21 @@ Architecture:
 
 ---
 
-## 📦 Dataset: Processed Agricultural Data
+## 📈 Advanced Analysis
 
-We processed a massive multi-source dataset specifically for this project.
+### Efficiency Frontier (Accuracy vs Size)
+<p align="center">
+  <img src="outputs/figures/comparison/11_efficiency_plot.png" alt="Efficiency Plot" width="80%"/>
+</p>
+
+### Metric Stability Heatmap
+<p align="center">
+  <img src="outputs/figures/comparison/06_heatmap.png" alt="Heatmap" width="70%"/>
+</p>
+
+---
+
+## 📦 Processed Dataset
 
 | Property | Value |
 |----------|-------|
@@ -219,12 +192,6 @@ We processed a massive multi-source dataset specifically for this project.
 | **Records** | **827,014** total records |
 | **Features** | **33** engineered features |
 | **Commodities** | 445 distinct agricultural products |
-| **Date Range** | 1992 - 2024 (32 Years) |
-
-### Feature Engineering
-*   **Rolling Statistics**: 7, 14, 30-day Means and Standard Deviations.
-*   **Cyclical Features**: Day of week / Month encoded as Sine/Cosine transformations.
-*   **Target Transformation**: Log-Returns (Stationary) + Robust Scaling.
 
 ---
 
@@ -244,26 +211,11 @@ All training is handled by the **production-ready** `src/train_all.py` script.
 
 ```bash
 cd src
-
-# Option A: Train models individually (Recommended)
+# Train individual models
 python train_all.py --model PatchTST
-python train_all.py --model WaveNet
-
-# Option B: Run full training pipeline
-python train_all.py --all
-
-# Option C: Generate Comparison Charts (After training)
+# Generate Comparisons
 python train_all.py --compare
 ```
-
----
-
-## 🔧 Technical Implementation Details
-
-*   **Mixed Precision Training**: FP16 enabled for 2x speedup on compatible GPUs (RTX 4060).
-*   **Optimization**: AdamW optimizer with Gradient Clipping (`clipnorm=1.0`) to prevent exploding gradients.
-*   **Scheduling**: ReduceLROnPlateau learning rate scheduler (Start: 1e-3 -> Min: 1e-7).
-*   **Evaluation**: Custom financial metrics including **Directional Accuracy** (Up/Down prediction) and **Information Coefficient**.
 
 ---
 

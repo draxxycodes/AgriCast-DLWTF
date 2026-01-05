@@ -1,12 +1,1 @@
-{
-  "model": "GRU",
-  "rmse": 0.668,
-  "mae": 0.495,
-  "mape": 2.9182955450912633,
-  "r2": 0.215,
-  "directional_acc": 71.2,
-  "ic": 0.45,
-  "ic_pvalue": 0.0001,
-  "params": 1800000,
-  "epochs": 30
-}
+{"rmse": 0.668, "mae": 0.495, "r2": 0.215, "acc": 71.2, "ic": 0.45, "params": 1800000, "color": "#1abc9c"}

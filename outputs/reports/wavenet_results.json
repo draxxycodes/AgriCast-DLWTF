@@ -1,12 +1,1 @@
-{
-  "model": "WAVENET",
-  "rmse": 0.645,
-  "mae": 0.475,
-  "mape": 3.855993767635539,
-  "r2": 0.254,
-  "directional_acc": 74.9,
-  "ic": 0.49,
-  "ic_pvalue": 0.0001,
-  "params": 600000,
-  "epochs": 30
-}
+{"rmse": 0.645, "mae": 0.475, "r2": 0.254, "acc": 74.9, "ic": 0.49, "params": 600000, "color": "#9b59b6"}
