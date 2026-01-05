@@ -1141,7 +1141,7 @@ def main():
     args = parser.parse_args()
     
     print("\n" + "=" * 70)
-    print("🚀 COMPREHENSIVE MODEL TRAINING - MAXIMUM PARAMETERS (FULL DATASET)")
+    print("🚀 AGRICAST PRODUCTION TRAINING PIPELINE - v2.0")
     print("=" * 70)
     
     # Create directories
