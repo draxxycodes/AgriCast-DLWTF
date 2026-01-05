@@ -48,7 +48,7 @@
 
 We implemented **state-of-the-art architectures** with rigorous hyperparameter tuning to ensure robust generalization on volatile economic data.
 
-### 👑 Hybrid Ensemble (Meta-Learner)
+### 👑 1. Hybrid Ensemble (Meta-Learner)
 
 **RMSE: 0.585 | R²: 0.358 | Parameters: 25.0M (Combined)**
 
@@ -76,7 +76,7 @@ Architecture:
 
 ---
 
-### 🥈 PatchTST (2023 SOTA)
+### 🥈 2. PatchTST (2023 SOTA)
 
 **RMSE: 0.612 | R²: 0.321 | Parameters: 1.1M**
 
@@ -105,7 +105,7 @@ Architecture:
 
 ---
 
-### 🥉 N-BEATS (Neural Basis Expansion)
+### 🥉 3. N-BEATS (Neural Basis Expansion)
 
 **RMSE: 0.625 | R²: 0.294 | Parameters: 17.5M**
 
@@ -132,7 +132,39 @@ Architecture:
 
 ---
 
-### 4️⃣ WaveNet (Dense/Dilated)
+### 4️⃣ 4. Transformer (Performance Optimized)
+
+**RMSE: 0.631 | R²: 0.285 | Parameters: 2.1M**
+
+```
+Architecture:
+├── Input (60 timesteps)
+├── Positional Encoding
+├── 4× Encoder Layers
+│   ├── Pre-LayerNorm
+│   ├── Multi-Head Self-Attention (4 heads)
+│   ├── Dropout (0.1)
+│   └── Feed Forward (Dim=128)
+├── Global Average Pooling
+└── MLP Head
+```
+
+**Key Features:** Pre-LayerNorm for training stability. Optimized embedding size prevents overfitting while retaining capacity.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/transformer/predictions.png" alt="Transformer Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/transformer/training_curves.png" alt="Transformer Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+---
+
+### 5️⃣ 5. WaveNet (Dense/Dilated)
 
 **RMSE: 0.645 | R²: 0.254 | Parameters: 0.6M**
 
@@ -151,7 +183,7 @@ Architecture:
 
 ---
 
-### 5️⃣ TCN (Temporal Convolutional Network)
+### 6️⃣ 6. TCN (Temporal Convolutional Network)
 
 **RMSE: 0.652 | R²: 0.241 | Parameters: 0.5M**
 
@@ -164,6 +196,44 @@ Architecture:
 </td>
 <td width="50%">
 <img src="outputs/figures/tcn/training_curves.png" alt="TCN Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+---
+
+### 7️⃣ 7. GRU (Gated Recurrent Unit)
+
+**RMSE: 0.668 | R²: 0.215 | Parameters: 1.8M**
+
+**Key Features:** Simplified gating mechanism. Good at capturing short-to-medium term dependencies with fewer parameters than LSTM.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/gru/predictions.png" alt="GRU Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/gru/training_curves.png" alt="GRU Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+---
+
+### 8️⃣ 8. LSTM (Long Short-Term Memory)
+
+**RMSE: 0.675 | R²: 0.195 | Parameters: 1.9M**
+
+**Key Features:** Classic memory network. Optimized with L2 regularization and removed recurrent dropout for GPU speed.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/lstm/predictions.png" alt="LSTM Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/lstm/training_curves.png" alt="LSTM Training" width="100%"/>
 </td>
 </tr>
 </table>
