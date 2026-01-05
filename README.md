@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  An <b>industry-grade intelligent system</b> for predicting agricultural commodity prices using <b>7 advanced deep learning architectures</b> including PatchTST, N-BEATS, WaveNet, TCN, Transformer, GRU, and LSTM. Optimized as <b>"Tiny Versions"</b> (< 2M parameters) for maximum efficiency on large tabular datasets (~827k records).
+  An <b>industry-grade intelligent system</b> for predicting agricultural commodity prices using <b>7 advanced deep learning architectures</b> including PatchTST, N-BEATS, WaveNet, TCN, Transformer, GRU, and LSTM. Optimized for <b>Maximum Scalability & Efficiency</b> on large-scale tabular datasets (~827k records).
 </p>
 
 <p align="center">
@@ -36,7 +36,7 @@
 | 7 | LSTM | 0.675 | 0.502 | 70.1% | 0.195 | 1.9M |
 
 > **📈 Best Overall**: PatchTST achieves the highest R² (0.321) and Directional Accuracy (78.5%).
-> **⚡ Most Efficient**: TCN achieves competitive results with only ~0.5M parameters.
+> **⚡ Most Efficient**: TCN achieves competitive results with a highly optimized parameter footprint.
 
 <p align="center">
   <img src="outputs/figures/comparison/01_metrics_bars.png" alt="Model Metrics Comparison" width="100%"/>
@@ -44,9 +44,9 @@
 
 ---
 
-## 🧠 Model Architectures (Tiny & Optimized)
+## 🧠 Model Architectures (Optimized & Scalable)
 
-We engineered **"Tiny Versions" (<2M parameters)** of state-of-the-art architectures to prevent overfitting and maximize training speed.
+We implemented **state-of-the-art architectures** with rigorous hyperparameter tuning to ensure robust generalization and prevent overfitting on volatile economic data.
 
 ### 🥇 PatchTST (2023 SOTA) - Best Model
 
@@ -118,7 +118,7 @@ Architecture:
 
 ---
 
-### 🥉 Transformer (Tiny)
+### 🥉 Transformer (Performance Optimized)
 
 **RMSE: 0.631 | R²: 0.285 | Parameters: 2.1M**
 
@@ -135,7 +135,7 @@ Architecture:
 └── MLP Head
 ```
 
-**Key Features:** Pre-LayerNorm for training stability. Small embedding size (dim=32) prevents overfitting.
+**Key Features:** Pre-LayerNorm for training stability. Optimized embedding size prevents overfitting while retaining capacity.
 
 <table>
 <tr>
@@ -148,7 +148,7 @@ Architecture:
 </tr>
 </table>
 
-### 4️⃣ WaveNet (Tiny)
+### 4️⃣ WaveNet (Dense/Dilated)
 
 **RMSE: 0.645 | R²: 0.254 | Parameters: 0.6M**
 
@@ -164,7 +164,7 @@ Architecture:
 └── Output
 ```
 
-**Key Features:** Gated activations filter noise. Exponential dilation sees full history efficiently.
+**Key Features:** Gated activations filter noise. Exponential dilation allows the model to view the complete history with high efficiency.
 
 <table>
 <tr>
@@ -179,7 +179,7 @@ Architecture:
 
 ---
 
-### 5️⃣ TCN (Tiny Temporal Convolutional Network)
+### 5️⃣ TCN (Temporal Convolutional Network)
 
 **RMSE: 0.652 | R²: 0.241 | Parameters: 0.5M**
 
@@ -194,7 +194,7 @@ Architecture:
 └── Dense Head
 ```
 
-**Key Features:** "ResNet for Time Series". Large receptive field with minimal parameters.
+**Key Features:** "ResNet for Time Series". Large receptive field ensures long-term dependencies are captured without gradient degradation.
 
 <table>
 <tr>
@@ -222,9 +222,9 @@ We processed a massive multi-source dataset specifically for this project.
 | **Date Range** | 1992 - 2024 (32 Years) |
 
 ### Feature Engineering
-*   **Rolling Stats**: 7, 14, 30-day Means and Std Dev.
-*   **Cyclical**: Day of week / Month encoded as Sine/Cosine.
-*   **Target**: Log-Returns (Stationary) + Robust Scaling.
+*   **Rolling Statistics**: 7, 14, 30-day Means and Standard Deviations.
+*   **Cyclical Features**: Day of week / Month encoded as Sine/Cosine transformations.
+*   **Target Transformation**: Log-Returns (Stationary) + Robust Scaling.
 
 ---
 
@@ -240,7 +240,7 @@ pip install -r requirements.txt
 ```
 
 ### 2. Train Models
-All training is handled by the **optimized** `src/train_all.py` script.
+All training is handled by the **production-ready** `src/train_all.py` script.
 
 ```bash
 cd src
@@ -249,7 +249,7 @@ cd src
 python train_all.py --model PatchTST
 python train_all.py --model WaveNet
 
-# Option B: Run full sequence
+# Option B: Run full training pipeline
 python train_all.py --all
 
 # Option C: Generate Comparison Charts (After training)
@@ -260,10 +260,10 @@ python train_all.py --compare
 
 ## 🔧 Technical Implementation Details
 
-*   **Mixed Precision**: FP16 enabled for 2x speedup on RTX 4060.
-*   **Optimization**: AdamW with Gradient Clipping (`clipnorm=1.0`) to prevent exploding gradients.
-*   **Scheduling**: ReduceLROnPlateau (Start: 1e-3 -> Min: 1e-7).
-*   **Evaluation**: Custom metrics including **Directional Accuracy** (Up/Down prediction) and **Information Coefficient**.
+*   **Mixed Precision Training**: FP16 enabled for 2x speedup on compatible GPUs (RTX 4060).
+*   **Optimization**: AdamW optimizer with Gradient Clipping (`clipnorm=1.0`) to prevent exploding gradients.
+*   **Scheduling**: ReduceLROnPlateau learning rate scheduler (Start: 1e-3 -> Min: 1e-7).
+*   **Evaluation**: Custom financial metrics including **Directional Accuracy** (Up/Down prediction) and **Information Coefficient**.
 
 ---
 
