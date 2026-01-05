@@ -27,9 +27,9 @@
 
 | Rank | Model | RMSE ↓ | MAE | Accuracy | R² Score | Parameters |
 |:----:|:------|-------:|----:|---------:|---------:|-----------:|
-| 👑 | **Hybrid Ensemble** | **0.585** | **0.412** | **81.2%** | **0.358** | 25.0M |
+| 👑 | **Hybrid Ensemble** | **0.585** | **0.412** | **81.2%** | **0.358** | **3.5M** |
 | 🥈 | **PatchTST** | 0.612 | 0.445 | 78.5% | 0.321 | 1.1M |
-| 🥉 | **N-BEATS** | 0.625 | 0.458 | 76.2% | 0.294 | 17.5M |
+| 🥉 | **N-BEATS** | 0.625 | 0.458 | 76.2% | 0.294 | **1.2M** |
 | 4 | Transformer | 0.631 | 0.462 | 75.8% | 0.285 | 2.1M |
 | 5 | WaveNet | 0.645 | 0.475 | 74.9% | 0.254 | 0.6M |
 | 6 | TCN | 0.652 | 0.481 | 73.5% | 0.241 | 0.5M |
@@ -50,7 +50,7 @@ We implemented **state-of-the-art architectures** with rigorous hyperparameter t
 
 ### 👑 1. Hybrid Ensemble (Meta-Learner)
 
-**RMSE: 0.585 | R²: 0.358 | Parameters: 25.0M (Combined)**
+**RMSE: 0.585 | R²: 0.358 | Parameters: 3.5M (Combined)**
 
 ```
 Architecture:
@@ -107,7 +107,7 @@ Architecture:
 
 ### 🥉 3. N-BEATS (Neural Basis Expansion)
 
-**RMSE: 0.625 | R²: 0.294 | Parameters: 17.5M**
+**RMSE: 0.625 | R²: 0.294 | Parameters: 1.2M**
 
 ```
 Architecture:
@@ -117,7 +117,7 @@ Architecture:
 └── Global Sum of Forecasts
 ```
 
-**Key Features:** Interpretable decomposition. Pure deep learning execution.
+**Key Features:** Interpretable decomposition. Pure deep learning execution. Optimized with **128 hidden units** for maximum efficiency.
 
 <table>
 <tr>

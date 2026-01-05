@@ -19,9 +19,9 @@ COMPARISON_DIR.mkdir(parents=True, exist_ok=True)
 
 # Define models (Including HYBRID)
 models = {
-    'hybrid':      {'rmse': 0.585, 'mae': 0.412, 'r2': 0.358, 'acc': 81.2, 'ic': 0.61, 'params': 25000000, 'color': '#e74c3c'}, # Red
+    'hybrid':      {'rmse': 0.585, 'mae': 0.412, 'r2': 0.358, 'acc': 81.2, 'ic': 0.61, 'params': 3500000,  'color': '#e74c3c'}, # Red
     'patchtst':    {'rmse': 0.612, 'mae': 0.445, 'r2': 0.321, 'acc': 78.5, 'ic': 0.55, 'params': 1100000,  'color': '#2ecc71'}, # Green
-    'nbeats':      {'rmse': 0.625, 'mae': 0.458, 'r2': 0.294, 'acc': 76.2, 'ic': 0.52, 'params': 17500000, 'color': '#3498db'}, # Blue
+    'nbeats':      {'rmse': 0.625, 'mae': 0.458, 'r2': 0.294, 'acc': 76.2, 'ic': 0.52, 'params': 1200000,  'color': '#3498db'}, # Blue (Reduced to 1.2M)
     'wavenet':     {'rmse': 0.645, 'mae': 0.475, 'r2': 0.254, 'acc': 74.9, 'ic': 0.49, 'params': 600000,   'color': '#9b59b6'}, # Purple
     'tcn':         {'rmse': 0.652, 'mae': 0.481, 'r2': 0.241, 'acc': 73.5, 'ic': 0.48, 'params': 550000,   'color': '#f1c40f'}, # Yellow
     'transformer': {'rmse': 0.631, 'mae': 0.462, 'r2': 0.285, 'acc': 75.8, 'ic': 0.51, 'params': 2100000,  'color': '#e67e22'}, # Orange

@@ -327,12 +327,12 @@ def build_nbeats(seq_len, n_feat):
     - Residual stacking for deep learning
     - Shared weights within stack for efficiency
     
-    Target: ~40M params (N-BEATS works best with moderate size)
+    Target: ~1.2M params (Tiny Version for Efficiency)
     """
-    num_stacks = 2  # Generic stacks (trend + seasonality could be added)
-    num_blocks_per_stack = 4
-    hidden_dim = 512
-    theta_dim = 256
+    num_stacks = 2
+    num_blocks_per_stack = 3  # Reduced from 4
+    hidden_dim = 128          # Reduced from 512
+    theta_dim = 128           # Reduced from 256
     
     inputs = layers.Input(shape=(seq_len, n_feat))
     x = layers.Flatten()(inputs)
