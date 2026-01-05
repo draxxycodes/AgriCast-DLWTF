@@ -9,6 +9,7 @@ import os
 import sys
 import warnings
 warnings.filterwarnings('ignore')
+import argparse
 
 import numpy as np
 import pandas as pd
@@ -37,27 +38,31 @@ from sklearn.preprocessing import RobustScaler, MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 # =====================================================
-# CONFIG - MAXIMUM PARAMETERS
+# CONFIG - MAXIMUM PARAMETERS (FULL DATASET)
 # =====================================================
 PROJECT_ROOT = Path(__file__).parent.parent
-DATA_PATH = PROJECT_ROOT / "data" / "daily_prices.csv"
+DATA_PATH = PROJECT_ROOT / "data" / "processed_agricultural.csv"  # CLEANED AGRICULTURAL DATA
 MODEL_DIR = PROJECT_ROOT / "models"
 FIGURES_DIR = PROJECT_ROOT / "outputs" / "figures"
 COMPARISON_DIR = FIGURES_DIR / "comparison"
 REPORTS_DIR = PROJECT_ROOT / "outputs" / "reports"
 
 SEQUENCE_LENGTH = 60
-EPOCHS = 200
-BATCH_SIZE = 32
-PATIENCE = 35
-LEARNING_RATE = 1e-4
+EPOCHS = 10  # Reduced to 30 for faster turnaround
+BATCH_SIZE = 2048  # Increased to 2048 (16% usage -> Target 80%+)
+PATIENCE = 5     # Aggressive early stopping
+LEARNING_RATE = 1e-3  # Increased to 0.001 for faster convergence with Batch 2048
+
+# Top commodities to one-hot encode (covers ~70% of data)
+TOP_COMMODITIES = ['maize', 'wheat', 'rice', 'millet', 'sugar', 'sorghum', 
+                   'wheat flour', 'potatoes', 'tomatoes', 'onions', 'lentils', 'beans (dry)']
 
 # Model-specific learning rates (attention models need lower LR to prevent NaN)
 MODEL_LR = {
-    'Transformer': 5e-5,
-    'Attention': 5e-5,
-    'TFT': 8e-5,
-    'default': 1e-4
+    'Transformer': 1e-3,  # Increased from 1e-4
+    'Attention': 1e-3,
+    'TFT': 1e-3,
+    'default': 1e-3       # Main speed boost
 }
 
 def get_optimizer(model_name):
@@ -65,55 +70,120 @@ def get_optimizer(model_name):
     lr = MODEL_LR.get(model_name, MODEL_LR['default'])
     return keras.optimizers.AdamW(learning_rate=lr, clipnorm=1.0, weight_decay=1e-5)
 
+# Global storage for transformation parameters (needed for reverse transform)
+TRANSFORM_PARAMS = {}
+
 # =====================================================
-# DATA LOADING
+# DATA LOADING - FULL DATASET WITH ENHANCED PREPROCESSING
 # =====================================================
 def load_data():
-    """Load and prepare data."""
-    print("\n📊 Loading data...")
+    """Load and prepare the preprocessed agricultural dataset.
+    
+    The data has already been cleaned and preprocessed by preprocess_clean.py:
+    - Filtered to agricultural commodities only
+    - Outliers removed via IQR
+    - Log-transformed and normalized per commodity
+    - Log-returns computed for stationarity
+    """
+    global TRANSFORM_PARAMS
+    print("\n📊 Loading preprocessed agricultural dataset...")
     
     df = pd.read_csv(DATA_PATH)
-    df['date'] = pd.to_datetime(df['date'])
+    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+    df = df.dropna(subset=['date', 'price_normalized'])
     df = df.sort_values('date').reset_index(drop=True)
     
-    prices = df['price'].values
-    features = pd.DataFrame()
+    print(f"  Records: {len(df):,}")
+    print(f"  Date range: {df['date'].min()} to {df['date'].max()}")
+    print(f"  Commodities: {df['commodity_clean'].nunique()}")
     
-    features['price'] = prices
-    features['log_price'] = np.log1p(prices)
-    features['pct_change'] = pd.Series(prices).pct_change().fillna(0)
+    # Select feature columns - EXCLUDE the target (price_normalized) to prevent leakage
+    exclude_cols = ['date', 'price', 'price_log', 'price_normalized', 'commodity_clean', 
+                    'commodity_mean', 'commodity_std', 'log_return']
+    feature_cols = [col for col in df.columns if col not in exclude_cols and df[col].dtype in ['float64', 'float32', 'int64', 'int32']]
     
-    for w in [7, 14, 30]:
-        features[f'ma_{w}'] = pd.Series(prices).rolling(w, min_periods=1).mean()
-        features[f'std_{w}'] = pd.Series(prices).rolling(w, min_periods=1).std().fillna(0)
+    print(f"  Features: {len(feature_cols)}")
     
-    features['momentum'] = prices - features['ma_7']
+    # Prepare features
+    features = df[feature_cols].copy()
+    features = features.replace([np.inf, -np.inf], 0).fillna(0)
     
+    # Scale features using RobustScaler
     scaler = RobustScaler()
-    scaled = scaler.fit_transform(features.values)
+    scaled = scaler.fit_transform(features.values).astype(np.float32)
     
-    X, y = [], []
-    for i in range(len(scaled) - SEQUENCE_LENGTH):
-        X.append(scaled[i:i+SEQUENCE_LENGTH])
-        y.append(scaled[i+SEQUENCE_LENGTH, 0])
+    # Target: price_normalized (NOT log_return - those are nearly random!)
+    # price_normalized is z-scored per commodity, comparable across commodities
+    y = df['price_normalized'].values.astype(np.float32)
     
-    X = np.array(X, dtype=np.float32)
-    y = np.array(y, dtype=np.float32)
+    # Store transform params
+    TRANSFORM_PARAMS = {
+        'target_type': 'normalized_price',
+        'feature_cols': feature_cols,
+    }
     
+    # Create sequences
+    print("  Creating sequences...")
+    n_samples = len(scaled) - SEQUENCE_LENGTH
+    n_features = scaled.shape[1]
+    
+    # Use strided view for memory efficiency
+    X = np.lib.stride_tricks.sliding_window_view(scaled[:-1], (SEQUENCE_LENGTH, n_features))
+    X = X[:n_samples, 0, :, :]
+    y = y[SEQUENCE_LENGTH:n_samples + SEQUENCE_LENGTH]
+    
+    # Make contiguous copies
+    X = np.ascontiguousarray(X, dtype=np.float32)
+    y = np.ascontiguousarray(y, dtype=np.float32)
+    
+    # Train/Val/Test split (70/15/15)
     n = len(X)
     train_end = int(n * 0.70)
     val_end = int(n * 0.85)
     
+    X_train, y_train = X[:train_end], y[:train_end]
+    X_val, y_val = X[train_end:val_end], y[train_end:val_end]
+    X_test, y_test = X[val_end:], y[val_end:]
+    
+    # Create tf.data.Datasets using generators
+    print("  Creating tf.data.Datasets...")
+    
+    def make_generator(X_data, y_data):
+        def gen():
+            for i in range(len(X_data)):
+                yield X_data[i], y_data[i]
+        return gen
+    
+    output_signature = (
+        tf.TensorSpec(shape=(SEQUENCE_LENGTH, n_features), dtype=tf.float32),
+        tf.TensorSpec(shape=(), dtype=tf.float32)
+    )
+    
+    train_ds = tf.data.Dataset.from_generator(
+        make_generator(X_train, y_train),
+        output_signature=output_signature
+    ).shuffle(buffer_size=10000).batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
+    
+    val_ds = tf.data.Dataset.from_generator(
+        make_generator(X_val, y_val),
+        output_signature=output_signature
+    ).batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
+    
     splits = {
-        'X_train': X[:train_end], 'y_train': y[:train_end],
-        'X_val': X[train_end:val_end], 'y_val': y[train_end:val_end],
-        'X_test': X[val_end:], 'y_test': y[val_end:],
+        'train_ds': train_ds,
+        'val_ds': val_ds,
+        'X_test': X_test, 'y_test': y_test,
         'dates': df['date'].values[SEQUENCE_LENGTH:],
-        'prices': df['price'].values
+        'prices': df['price'].values,
+        'n_train': len(X_train),
+        'n_val': len(X_val),
+        'n_test': len(X_test)
     }
     
-    print(f"✓ Features: {X.shape[2]}, Train: {splits['X_train'].shape[0]}")
-    return splits, scaler
+    print(f"✓ Dataset ready!")
+    print(f"  Features: {n_features}, Sequence length: {SEQUENCE_LENGTH}")
+    print(f"  Train: {splits['n_train']:,} | Val: {splits['n_val']:,} | Test: {splits['n_test']:,}")
+    return splits, scaler, n_features
 
 
 # =====================================================
@@ -121,44 +191,16 @@ def load_data():
 # =====================================================
 
 def build_lstm(seq_len, n_feat):
-    """LSTM with Attention - ~50M params."""
+    """LSTM - Efficient Tiny Version (~2M params)."""
     inputs = layers.Input(shape=(seq_len, n_feat))
-    x = layers.Dense(768)(inputs)
+    x = layers.Dense(128)(inputs)
+    # Block 1
+    x = layers.Bidirectional(layers.LSTM(256, return_sequences=True, dropout=0.2))(x)
     x = layers.LayerNormalization()(x)
-    
-    # Deep Bidirectional LSTM stack
-    x = layers.Bidirectional(layers.LSTM(768, return_sequences=True))(x)
-    x = layers.Dropout(0.15)(x)
+    # Block 2
+    x = layers.Bidirectional(layers.LSTM(128, return_sequences=False, dropout=0.2))(x)
     x = layers.LayerNormalization()(x)
-    
-    x = layers.Bidirectional(layers.LSTM(640, return_sequences=True))(x)
-    x = layers.Dropout(0.15)(x)
-    x = layers.LayerNormalization()(x)
-    
-    x = layers.Bidirectional(layers.LSTM(512, return_sequences=True))(x)
-    x = layers.Dropout(0.15)(x)
-    x = layers.LayerNormalization()(x)
-    
-    # Multi-head attention
-    attn = layers.MultiHeadAttention(num_heads=16, key_dim=64, dropout=0.1)(x, x)
-    x = layers.Add()([x, attn])
-    x = layers.LayerNormalization()(x)
-    
-    x = layers.Bidirectional(layers.LSTM(384, return_sequences=True))(x)
-    x = layers.Dropout(0.15)(x)
-    x = layers.LayerNormalization()(x)
-    
-    x = layers.Bidirectional(layers.LSTM(256, return_sequences=True))(x)
-    attn2 = layers.MultiHeadAttention(num_heads=8, key_dim=48, dropout=0.1)(x, x)
-    x = layers.Add()([x, attn2])
-    x = layers.LayerNormalization()(x)
-    
-    x = layers.GlobalAveragePooling1D()(x)
-    x = layers.Dense(1024, activation='gelu')(x)
-    x = layers.Dropout(0.3)(x)
-    x = layers.Dense(512, activation='gelu')(x)
-    x = layers.Dropout(0.2)(x)
-    x = layers.Dense(256, activation='gelu')(x)
+    # Head
     x = layers.Dense(64, activation='gelu')(x)
     outputs = layers.Dense(1, dtype='float32')(x)
     model = Model(inputs, outputs, name='LSTM')
@@ -167,32 +209,17 @@ def build_lstm(seq_len, n_feat):
 
 
 def build_gru(seq_len, n_feat):
-    """GRU with Residual - ~60M params."""
+    """GRU - Efficient Tiny Version (~2M params)."""
     inputs = layers.Input(shape=(seq_len, n_feat))
-    x = layers.Dense(1024)(inputs)
+    x = layers.Dense(128)(inputs)
+    # Block 1
+    x = layers.Bidirectional(layers.GRU(256, return_sequences=True, dropout=0.2))(x)
     x = layers.LayerNormalization()(x)
-    
-    # 8 deep residual GRU blocks
-    for i in range(8):
-        gru = layers.Bidirectional(layers.GRU(640, return_sequences=True))(x)
-        gru = layers.Dropout(0.1)(gru)
-        if gru.shape[-1] != x.shape[-1]:
-            x = layers.Dense(gru.shape[-1])(x)
-        x = layers.Add()([x, gru])
-        x = layers.LayerNormalization()(x)
-    
-    # Attention layer with dropout
-    attn = layers.MultiHeadAttention(num_heads=16, key_dim=80, dropout=0.1)(x, x)
-    x = layers.Add()([x, attn])
+    # Block 2
+    x = layers.Bidirectional(layers.GRU(128, return_sequences=False, dropout=0.2))(x)
     x = layers.LayerNormalization()(x)
-    
-    x = layers.GlobalAveragePooling1D()(x)
-    x = layers.Dense(1024, activation='gelu')(x)
-    x = layers.Dropout(0.3)(x)
-    x = layers.Dense(512, activation='gelu')(x)
-    x = layers.Dropout(0.2)(x)
-    x = layers.Dense(256, activation='gelu')(x)
-    x = layers.Dense(128, activation='gelu')(x)
+    # Head
+    x = layers.Dense(64, activation='gelu')(x)
     outputs = layers.Dense(1, dtype='float32')(x)
     model = Model(inputs, outputs, name='GRU')
     model.compile(optimizer=get_optimizer('GRU'), loss='huber', metrics=['mae'])
@@ -200,42 +227,33 @@ def build_gru(seq_len, n_feat):
 
 
 def build_transformer(seq_len, n_feat):
-    """Transformer Encoder - ~40M params (NaN-safe with pre-norm)."""
+    """Transformer - Efficient Tiny Version (~2M params)."""
+    d_model = 128
+    num_heads = 4
+    ff_dim = 512
+    num_blocks = 4
+    
     inputs = layers.Input(shape=(seq_len, n_feat))
-    
-    # Input embedding with LayerNorm for stability
-    x = layers.Dense(512)(inputs)
-    x = layers.LayerNormalization()(x)
-    
-    # Learnable positional embedding
-    positions = tf.range(start=0, limit=seq_len, delta=1)
-    pos_emb = layers.Embedding(input_dim=seq_len, output_dim=512)(positions)
+    x = layers.Dense(d_model)(inputs)
+    # Positional Embedding
+    pos_emb = layers.Embedding(input_dim=seq_len, output_dim=d_model)(tf.range(start=0, limit=seq_len, delta=1))
     x = x + pos_emb
     x = layers.Dropout(0.1)(x)
     
-    # 12 Transformer blocks with PRE-NORM (critical for stability)
-    for _ in range(12):
-        # Pre-LayerNorm before attention (prevents gradient explosion)
+    for _ in range(num_blocks):
+        # Attention
         norm_x = layers.LayerNormalization()(x)
-        attn = layers.MultiHeadAttention(num_heads=16, key_dim=64, dropout=0.1)(norm_x, norm_x)
+        attn = layers.MultiHeadAttention(num_heads=num_heads, key_dim=d_model//num_heads, dropout=0.1)(norm_x, norm_x)
         x = layers.Add()([x, attn])
-        
-        # Pre-LayerNorm before FFN
+        # FFN
         norm_x = layers.LayerNormalization()(x)
-        ffn = layers.Dense(2048, activation='gelu')(norm_x)
+        ffn = layers.Dense(ff_dim, activation='gelu')(norm_x)
         ffn = layers.Dropout(0.1)(ffn)
-        ffn = layers.Dense(512)(ffn)
-        ffn = layers.Dropout(0.1)(ffn)
+        ffn = layers.Dense(d_model)(ffn)
         x = layers.Add()([x, ffn])
-    
-    # Final LayerNorm
+        
     x = layers.LayerNormalization()(x)
     x = layers.GlobalAveragePooling1D()(x)
-    
-    # Output head
-    x = layers.Dense(512, activation='gelu')(x)
-    x = layers.Dropout(0.2)(x)
-    x = layers.Dense(256, activation='gelu')(x)
     x = layers.Dense(64, activation='gelu')(x)
     outputs = layers.Dense(1, dtype='float32')(x)
     model = Model(inputs, outputs, name='Transformer')
@@ -244,28 +262,24 @@ def build_transformer(seq_len, n_feat):
 
 
 def build_tcn(seq_len, n_feat):
-    """TCN - ~30M params."""
+    """TCN - Efficient Tiny Version (~1M params)."""
+    filters = 128
+    kernel_size = 3
+    dilations = [1, 2, 4, 8, 16]
+    
     inputs = layers.Input(shape=(seq_len, n_feat))
-    x = layers.Conv1D(512, 1)(inputs)
-    x = layers.LayerNormalization()(x)
+    x = layers.Conv1D(filters, 1)(inputs)
     
-    # Triple dilation stack with 512 filters
-    for dilation in [1, 2, 4, 8, 16, 32, 1, 2, 4, 8, 16, 32, 1, 2, 4, 8, 16, 32]:
-        conv = layers.Conv1D(512, 3, padding='causal', dilation_rate=dilation)(x)
-        conv = layers.BatchNormalization()(conv)
-        conv = layers.Activation('relu')(conv)
-        conv = layers.Dropout(0.1)(conv)
-        conv = layers.Conv1D(512, 3, padding='causal', dilation_rate=dilation)(conv)
-        conv = layers.BatchNormalization()(conv)
-        x = layers.Add()([x, conv])
-        x = layers.Activation('relu')(x)
-    
+    for dilation in dilations:
+        # Residual Block
+        res = x
+        x = layers.Conv1D(filters, kernel_size, padding='causal', dilation_rate=dilation, activation='gelu')(x)
+        x = layers.SpatialDropout1D(0.1)(x)
+        x = layers.Conv1D(filters, kernel_size, padding='causal', dilation_rate=dilation, activation='gelu')(x)
+        x = layers.Add()([x, res])
+        x = layers.LayerNormalization()(x)
+        
     x = layers.GlobalAveragePooling1D()(x)
-    x = layers.Dense(1024, activation='gelu')(x)
-    x = layers.Dropout(0.3)(x)
-    x = layers.Dense(512, activation='gelu')(x)
-    x = layers.Dropout(0.2)(x)
-    x = layers.Dense(256, activation='gelu')(x)
     x = layers.Dense(64, activation='gelu')(x)
     outputs = layers.Dense(1, dtype='float32')(x)
     model = Model(inputs, outputs, name='TCN')
@@ -274,33 +288,28 @@ def build_tcn(seq_len, n_feat):
 
 
 def build_wavenet(seq_len, n_feat):
-    """WaveNet - ~30M params."""
+    """WaveNet - Efficient Tiny Version (~1M params)."""
+    filters = 128
+    dilations = [1, 2, 4, 8, 16, 32]
+    
     inputs = layers.Input(shape=(seq_len, n_feat))
-    x = layers.Conv1D(512, 1)(inputs)
-    x = layers.LayerNormalization()(x)
+    x = layers.Conv1D(filters, 1)(inputs)
     skip_connections = []
     
-    # Double stacks with wider filters
-    for dilation in [1, 2, 4, 8, 16, 32, 1, 2, 4, 8, 16, 32, 1, 2, 4, 8, 16, 32, 1, 2, 4, 8]:
-        if dilation > seq_len:
-            dilation = seq_len // 2
-        tanh_out = layers.Conv1D(512, 2, padding='causal', dilation_rate=dilation, activation='tanh')(x)
-        sigm_out = layers.Conv1D(512, 2, padding='causal', dilation_rate=dilation, activation='sigmoid')(x)
+    for dilation in dilations:
+        # Gated Activation
+        tanh_out = layers.Conv1D(filters, 2, padding='causal', dilation_rate=dilation, activation='tanh')(x)
+        sigm_out = layers.Conv1D(filters, 2, padding='causal', dilation_rate=dilation, activation='sigmoid')(x)
         gated = layers.Multiply()([tanh_out, sigm_out])
-        skip = layers.Conv1D(256, 1)(gated)
+        
+        # Skip & Residual
+        skip = layers.Conv1D(filters, 1)(gated)
         skip_connections.append(skip)
-        res = layers.Conv1D(512, 1)(gated)
-        x = layers.Add()([x, res])
+        x = layers.Add()([x, layers.Conv1D(filters, 1)(gated)])
         x = layers.LayerNormalization()(x)
-    
+        
     x = layers.Add()(skip_connections)
-    x = layers.Activation('relu')(x)
-    x = layers.Conv1D(512, 1, activation='relu')(x)
-    x = layers.Conv1D(256, 1, activation='relu')(x)
     x = layers.GlobalAveragePooling1D()(x)
-    x = layers.Dense(512, activation='gelu')(x)
-    x = layers.Dropout(0.2)(x)
-    x = layers.Dense(256, activation='gelu')(x)
     x = layers.Dense(64, activation='gelu')(x)
     outputs = layers.Dense(1, dtype='float32')(x)
     model = Model(inputs, outputs, name='WaveNet')
@@ -309,188 +318,139 @@ def build_wavenet(seq_len, n_feat):
 
 
 def build_nbeats(seq_len, n_feat):
-    """N-BEATS - ~40M params."""
+    """N-BEATS Optimized for Time Series Forecasting.
+    
+    Key optimizations:
+    - Interpretable architecture (trend + seasonality blocks)
+    - GELU activation for smoother gradients
+    - Proper regularization to prevent overfitting
+    - Residual stacking for deep learning
+    - Shared weights within stack for efficiency
+    
+    Target: ~40M params (N-BEATS works best with moderate size)
+    """
+    num_stacks = 2  # Generic stacks (trend + seasonality could be added)
+    num_blocks_per_stack = 4
+    hidden_dim = 512
+    theta_dim = 256
+    
     inputs = layers.Input(shape=(seq_len, n_feat))
     x = layers.Flatten()(inputs)
     x = layers.LayerNormalization()(x)
+    
+    block_input_dim = seq_len * n_feat
     forecasts = []
     residual = x
     
-    # 12 blocks with wider hidden layers
-    for _ in range(12):
-        h = layers.Dense(1024, activation='relu')(residual)
-        h = layers.Dropout(0.1)(h)
-        h = layers.LayerNormalization()(h)
-        h = layers.Dense(1024, activation='relu')(h)
-        h = layers.Dropout(0.1)(h)
-        h = layers.Dense(512, activation='relu')(h)
-        h = layers.Dense(256, activation='relu')(h)
-        forecast = layers.Dense(1, dtype='float32')(h)
-        forecasts.append(forecast)
-        backcast = layers.Dense(seq_len * n_feat)(h)
-        residual = layers.Subtract()([residual, backcast])
+    for stack_idx in range(num_stacks):
+        for block_idx in range(num_blocks_per_stack):
+            # Graduated dropout per block
+            dropout_rate = 0.1 + (stack_idx * 0.05) + (block_idx * 0.02)
+            
+            # FC stack with proper regularization
+            h = layers.Dense(hidden_dim, activation='gelu',
+                           kernel_regularizer=keras.regularizers.l2(1e-5))(residual)
+            h = layers.Dropout(dropout_rate)(h)
+            h = layers.LayerNormalization()(h)
+            
+            h = layers.Dense(hidden_dim, activation='gelu',
+                           kernel_regularizer=keras.regularizers.l2(1e-5))(h)
+            h = layers.Dropout(dropout_rate)(h)
+            h = layers.LayerNormalization()(h)
+            
+            h = layers.Dense(hidden_dim, activation='gelu',
+                           kernel_regularizer=keras.regularizers.l2(1e-5))(h)
+            h = layers.Dropout(dropout_rate * 0.5)(h)
+            
+            h = layers.Dense(theta_dim, activation='gelu',
+                           kernel_regularizer=keras.regularizers.l2(1e-5))(h)
+            
+            # Forecast output
+            forecast = layers.Dense(1, dtype='float32')(h)
+            forecasts.append(forecast)
+            
+            # Backcast for residual update
+            backcast = layers.Dense(block_input_dim,
+                                   kernel_regularizer=keras.regularizers.l2(1e-5))(h)
+            
+            # Update residual
+            residual = layers.Subtract()([residual, backcast])
+            residual = layers.LayerNormalization()(residual)
     
+    # Aggregate all forecasts
     outputs = layers.Add()(forecasts)
+    
     model = Model(inputs, outputs, name='NBEATS')
     model.compile(optimizer=get_optimizer('NBEATS'), loss='huber', metrics=['mae'])
     return model
 
 
-def build_tft(seq_len, n_feat):
-    """Temporal Fusion Transformer - ~35M params."""
+def build_patchtst(seq_len, n_feat):
+    """PatchTST - Efficient Tiny Version (~1M params)."""
+    d_model = 128
+    num_heads = 4
+    ff_dim = 256
+    num_blocks = 2
+    patch_len = 16
+    stride = 8
+    
     inputs = layers.Input(shape=(seq_len, n_feat))
     
-    # Variable selection with wider layers
-    x = layers.Dense(512)(inputs)
-    x = layers.LayerNormalization()(x)
-    gate = layers.Dense(512, activation='sigmoid')(inputs)
-    x = layers.Multiply()([x, gate])
+    # 1. Instance Norm (RevIN concept)
+    mean = layers.Reshape((1, n_feat))(layers.AveragePooling1D(pool_size=seq_len)(inputs))
+    std = layers.Reshape((1, n_feat))(layers.AveragePooling1D(pool_size=seq_len)(layers.Subtract()([inputs, mean])**2))
+    std = layers.Activation(lambda x: tf.sqrt(x + 1e-5))(std)
+    x = layers.Subtract()([inputs, mean])
+    # logical division using Lambda
+    x = layers.Lambda(lambda args: args[0] / (args[1] + 1e-5))([x, std])
     
-    # Deep LSTM processing
-    lstm_out = layers.Bidirectional(layers.LSTM(512, return_sequences=True))(x)
-    lstm_out = layers.Dropout(0.1)(lstm_out)
-    lstm_out = layers.LayerNormalization()(lstm_out)
-    
-    lstm_out = layers.Bidirectional(layers.LSTM(384, return_sequences=True))(lstm_out)
-    lstm_out = layers.Dropout(0.1)(lstm_out)
-    lstm_out = layers.LayerNormalization()(lstm_out)
-    
-    lstm_out = layers.Bidirectional(layers.LSTM(256, return_sequences=True))(lstm_out)
-    lstm_out = layers.LayerNormalization()(lstm_out)
-    
-    # Multi-head attention with dropout
-    attn = layers.MultiHeadAttention(num_heads=16, key_dim=64, dropout=0.1)(lstm_out, lstm_out)
-    x = layers.Add()([lstm_out, attn])
+    # 2. Patching (Conv1D)
+    x = layers.Conv1D(d_model, patch_len, strides=stride, padding='valid')(x)
     x = layers.LayerNormalization()(x)
     
-    # Second attention layer
-    attn2 = layers.MultiHeadAttention(num_heads=8, key_dim=48, dropout=0.1)(x, x)
-    x = layers.Add()([x, attn2])
-    x = layers.LayerNormalization()(x)
-    
-    # Gated skip connection
-    gate2 = layers.Dense(512, activation='sigmoid')(x)
-    x = layers.Multiply()([x, gate2])
-    
-    x = layers.GlobalAveragePooling1D()(x)
-    x = layers.Dense(512, activation='gelu')(x)
-    x = layers.Dropout(0.2)(x)
-    x = layers.Dense(256, activation='gelu')(x)
-    x = layers.Dense(64, activation='gelu')(x)
-    outputs = layers.Dense(1, dtype='float32')(x)
-    model = Model(inputs, outputs, name='TFT')
-    model.compile(optimizer=get_optimizer('TFT'), loss='huber', metrics=['mae'])
-    return model
-
-
-def build_conv_lstm(seq_len, n_feat):
-    """Conv-LSTM Hybrid - ~30M params."""
-    inputs = layers.Input(shape=(seq_len, n_feat))
-    
-    # Deep convolutional feature extraction
-    x = layers.Conv1D(256, 3, padding='same', activation='relu')(inputs)
-    x = layers.BatchNormalization()(x)
-    x = layers.Conv1D(384, 3, padding='same', activation='relu')(x)
-    x = layers.BatchNormalization()(x)
-    x = layers.Conv1D(512, 3, padding='same', activation='relu')(x)
-    x = layers.BatchNormalization()(x)
-    x = layers.MaxPooling1D(2)(x)
-    x = layers.Conv1D(512, 3, padding='same', activation='relu')(x)
-    x = layers.BatchNormalization()(x)
-    x = layers.Conv1D(384, 3, padding='same', activation='relu')(x)
-    x = layers.BatchNormalization()(x)
-    x = layers.Conv1D(256, 3, padding='same', activation='relu')(x)
-    x = layers.LayerNormalization()(x)
-    
-    # Deep LSTM stack
-    x = layers.Bidirectional(layers.LSTM(512, return_sequences=True))(x)
-    x = layers.Dropout(0.15)(x)
-    x = layers.LayerNormalization()(x)
-    x = layers.Bidirectional(layers.LSTM(384, return_sequences=True))(x)
-    x = layers.Dropout(0.15)(x)
-    x = layers.LayerNormalization()(x)
-    x = layers.Bidirectional(layers.LSTM(256, return_sequences=True))(x)
-    x = layers.LayerNormalization()(x)
-    x = layers.Bidirectional(layers.LSTM(128))(x)
-    
-    x = layers.Dense(512, activation='gelu')(x)
-    x = layers.Dropout(0.3)(x)
-    x = layers.Dense(256, activation='gelu')(x)
-    x = layers.Dropout(0.2)(x)
-    x = layers.Dense(128, activation='gelu')(x)
-    x = layers.Dense(32, activation='gelu')(x)
-    outputs = layers.Dense(1, dtype='float32')(x)
-    model = Model(inputs, outputs, name='ConvLSTM')
-    model.compile(optimizer=get_optimizer('ConvLSTM'), loss='huber', metrics=['mae'])
-    return model
-
-
-def build_dense(seq_len, n_feat):
-    """Deep Dense Network - ~50M params."""
-    inputs = layers.Input(shape=(seq_len, n_feat))
-    x = layers.Flatten()(inputs)
-    x = layers.LayerNormalization()(x)
-    
-    # Very deep and wide MLP
-    for units in [2048, 2048, 1536, 1536, 1024, 1024, 512, 512, 256, 256, 128]:
-        x = layers.Dense(units, activation='gelu')(x)
-        x = layers.Dropout(0.15)(x)
-        x = layers.BatchNormalization()(x)
-    
-    x = layers.Dense(64, activation='gelu')(x)
-    outputs = layers.Dense(1, dtype='float32')(x)
-    model = Model(inputs, outputs, name='DenseNN')
-    model.compile(optimizer=get_optimizer('DenseNN'), loss='huber', metrics=['mae'])
-    return model
-
-
-def build_attention_only(seq_len, n_feat):
-    """Pure Attention - ~35M params (NaN-safe with pre-norm)."""
-    inputs = layers.Input(shape=(seq_len, n_feat))
-    
-    # Input embedding with normalization
-    x = layers.Dense(384)(inputs)
-    x = layers.LayerNormalization()(x)
-    
-    # Add positional encoding
-    positions = tf.range(start=0, limit=seq_len, delta=1)
-    pos_emb = layers.Embedding(input_dim=seq_len, output_dim=384)(positions)
-    x = x + pos_emb
-    x = layers.Dropout(0.1)(x)
-    
-    # 12 attention blocks with PRE-NORM (critical for stability)
-    for _ in range(12):
-        # Pre-LayerNorm before attention (prevents gradient explosion)
+    # 3. Transformer Backbone
+    for _ in range(num_blocks):
+        # Attention
         norm_x = layers.LayerNormalization()(x)
-        attn = layers.MultiHeadAttention(num_heads=12, key_dim=64, dropout=0.1)(norm_x, norm_x)
+        attn = layers.MultiHeadAttention(num_heads=num_heads, key_dim=d_model//num_heads, dropout=0.1)(norm_x, norm_x)
         x = layers.Add()([x, attn])
-        
-        # Pre-LayerNorm before FFN
+        # FFN
         norm_x = layers.LayerNormalization()(x)
-        ffn = layers.Dense(1536, activation='gelu')(norm_x)
+        ffn = layers.Dense(ff_dim, activation='gelu')(norm_x)
         ffn = layers.Dropout(0.1)(ffn)
-        ffn = layers.Dense(384)(ffn)
-        ffn = layers.Dropout(0.1)(ffn)
+        ffn = layers.Dense(d_model)(ffn)
         x = layers.Add()([x, ffn])
     
-    # Final LayerNorm
     x = layers.LayerNormalization()(x)
     x = layers.GlobalAveragePooling1D()(x)
     
-    x = layers.Dense(384, activation='gelu')(x)
-    x = layers.Dropout(0.2)(x)
-    x = layers.Dense(128, activation='gelu')(x)
+    # 4. Head
     x = layers.Dense(64, activation='gelu')(x)
     outputs = layers.Dense(1, dtype='float32')(x)
-    model = Model(inputs, outputs, name='Attention')
-    model.compile(optimizer=get_optimizer('Attention'), loss='huber', metrics=['mae'])
+    
+    # Simple Denorm (optional, usually handled by target scaling, but we output normalized)
+    
+    model = Model(inputs, outputs, name='PatchTST')
+    model.compile(optimizer=get_optimizer('PatchTST'), loss='huber', metrics=['mae'])
     return model
 
+
+# =====================================================
+# MODEL REGISTRY
+# =====================================================
+MODEL_BUILDERS = {
+    'LSTM': build_lstm,
+    'GRU': build_gru,
+    'Transformer': build_transformer,
+    'TCN': build_tcn,
+    'WaveNet': build_wavenet,
+    'NBEATS': build_nbeats,
+    'PatchTST': build_patchtst
+}
 
 # =====================================================
 # INDIVIDUAL MODEL VISUALIZATION
 # =====================================================
-
 def plot_model_training(history, name, model_dir):
     """Plot training curves for a single model."""
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
@@ -523,22 +483,35 @@ def plot_model_predictions(y_true, y_pred, dates, name, model_dir):
     """Plot predictions vs actual for a single model."""
     fig, axes = plt.subplots(2, 1, figsize=(16, 10))
     
+    # Downsample if too many points to avoid matplotlib overflow
+    MAX_POINTS = 5000
+    if len(y_true) > MAX_POINTS:
+        step = len(y_true) // MAX_POINTS
+        y_true_plot = y_true[::step]
+        y_pred_plot = y_pred[::step]
+        dates_plot = dates[-len(y_true):][::step]
+    else:
+        y_true_plot = y_true
+        y_pred_plot = y_pred
+        dates_plot = dates[-len(y_true):]
+    
     # Time series
-    axes[0].plot(dates[-len(y_true):], y_true, 'b-', label='Actual', linewidth=1.5, alpha=0.8)
-    axes[0].plot(dates[-len(y_pred):], y_pred, 'r--', label='Predicted', linewidth=1.5, alpha=0.7)
-    axes[0].fill_between(dates[-len(y_true):], y_true, y_pred, alpha=0.2, color='gray')
+    axes[0].plot(dates_plot, y_true_plot, 'b-', label='Actual', linewidth=1.5, alpha=0.8)
+    axes[0].plot(dates_plot, y_pred_plot, 'r--', label='Predicted', linewidth=1.5, alpha=0.7)
+    axes[0].fill_between(dates_plot, y_true_plot, y_pred_plot, alpha=0.2, color='gray')
     axes[0].set_xlabel('Date', fontsize=12)
     axes[0].set_ylabel('Price ($)', fontsize=12)
     axes[0].set_title(f'{name} - Actual vs Predicted Prices', fontsize=14, fontweight='bold')
     axes[0].legend(fontsize=10)
     axes[0].grid(True, alpha=0.3)
     
-    # Scatter plot with regression line
-    axes[1].scatter(y_true, y_pred, alpha=0.5, s=30, c='steelblue')
-    min_val = min(y_true.min(), y_pred.min())
+    # Scatter plot with regression line (use downsampled data)
+    axes[1].scatter(y_true_plot, y_pred_plot, alpha=0.5, s=30, c='steelblue')
+    min_val = min(y_true.min(), y_pred.min())  # Use full data for regression fit
     max_val = max(y_true.max(), y_pred.max())
     axes[1].plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, label='Perfect Prediction')
-    z = np.polyfit(y_true, y_pred, 1)
+    # Cast to float64 to fix numpy linalg float16 error
+    z = np.polyfit(y_true.astype(np.float64), y_pred.astype(np.float64), 1)
     p = np.poly1d(z)
     axes[1].plot([min_val, max_val], [p(min_val), p(max_val)], 'g-', linewidth=2, label=f'Regression (slope={z[0]:.3f})')
     axes[1].set_xlabel('Actual Price ($)', fontsize=12)
@@ -556,8 +529,16 @@ def plot_model_errors(errors, name, model_dir):
     """Plot error distribution for a single model."""
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
     
-    # Histogram
-    axes[0].hist(errors, bins=50, edgecolor='black', alpha=0.7, color='steelblue')
+    # Downsample if too many points for histogram/cumulative plots
+    MAX_POINTS = 10000
+    if len(errors) > MAX_POINTS:
+        step = len(errors) // MAX_POINTS
+        errors_sample = errors[::step]
+    else:
+        errors_sample = errors
+    
+    # Histogram (use sampled data)
+    axes[0].hist(errors_sample, bins=50, edgecolor='black', alpha=0.7, color='steelblue')
     axes[0].axvline(0, color='r', linestyle='--', linewidth=2)
     axes[0].axvline(np.mean(errors), color='g', linestyle='-', linewidth=2, label=f'Mean: {np.mean(errors):.2f}')
     axes[0].set_xlabel('Prediction Error ($)', fontsize=12)
@@ -566,8 +547,8 @@ def plot_model_errors(errors, name, model_dir):
     axes[0].legend(fontsize=10)
     axes[0].grid(True, alpha=0.3)
     
-    # Box plot by quartile
-    abs_errors = np.abs(errors)
+    # Box plot by quartile (use sampled data)
+    abs_errors = np.abs(errors_sample)
     q_data = [abs_errors[:len(abs_errors)//4], 
               abs_errors[len(abs_errors)//4:len(abs_errors)//2],
               abs_errors[len(abs_errors)//2:3*len(abs_errors)//4],
@@ -582,7 +563,7 @@ def plot_model_errors(errors, name, model_dir):
     axes[1].set_title(f'{name} - Error by Time Period', fontsize=14, fontweight='bold')
     axes[1].grid(True, alpha=0.3)
     
-    # Cumulative error
+    # Cumulative error (use sampled data)
     sorted_errors = np.sort(abs_errors)
     cumulative = np.arange(1, len(sorted_errors)+1) / len(sorted_errors)
     axes[2].plot(sorted_errors, cumulative, 'b-', linewidth=2)
@@ -684,11 +665,26 @@ def plot_comprehensive_comparison(all_results, predictions_dict, errors_dict, hi
     
     # ===== 3. PREDICTIONS OVERLAY =====
     fig, ax = plt.subplots(figsize=(20, 8))
-    ax.plot(dates[-len(y_true):], y_true, 'k-', label='Actual', linewidth=2.5, alpha=0.9)
+    
+    # Downsample for plotting if too many points
+    MAX_POINTS = 5000
+    if len(y_true) > MAX_POINTS:
+        step = len(y_true) // MAX_POINTS
+        y_true_plot = y_true[::step]
+        dates_plot = dates[-len(y_true):][::step]
+    else:
+        y_true_plot = y_true
+        dates_plot = dates[-len(y_true):]
+    
+    ax.plot(dates_plot, y_true_plot, 'k-', label='Actual', linewidth=2.5, alpha=0.9)
     
     colors = plt.cm.tab10(np.linspace(0, 1, len(predictions_dict)))
     for (name, pred), color in zip(predictions_dict.items(), colors):
-        ax.plot(dates[-len(pred):], pred, '--', label=name, color=color, alpha=0.7, linewidth=1.2)
+        if len(pred) > MAX_POINTS:
+            pred_plot = pred[::step]
+        else:
+            pred_plot = pred
+        ax.plot(dates_plot[:len(pred_plot)], pred_plot, '--', label=name, color=color, alpha=0.7, linewidth=1.2)
     
     ax.set_xlabel('Date', fontsize=12)
     ax.set_ylabel('Price ($)', fontsize=12)
@@ -841,9 +837,14 @@ def plot_comprehensive_comparison(all_results, predictions_dict, errors_dict, hi
     fig, axes = plt.subplots(rows, cols, figsize=(20, 5*rows))
     axes = axes.flatten()
     
+    # Downsample for scatter plots
+    MAX_POINTS = 3000
+    step = max(1, len(y_true) // MAX_POINTS)
+    
     for idx, (name, pred) in enumerate(predictions_dict.items()):
         residuals = y_true - pred
-        axes[idx].scatter(pred, residuals, alpha=0.5, s=15, c='steelblue')
+        # Use downsampled data for scatter
+        axes[idx].scatter(pred[::step], residuals[::step], alpha=0.5, s=15, c='steelblue')
         axes[idx].axhline(0, color='red', linestyle='--', linewidth=1.5)
         axes[idx].set_xlabel('Predicted', fontsize=10)
         axes[idx].set_ylabel('Residual', fontsize=10)
@@ -944,48 +945,52 @@ def plot_comprehensive_comparison(all_results, predictions_dict, errors_dict, hi
 def get_callbacks(name):
     return [
         keras.callbacks.EarlyStopping(monitor='val_loss', patience=PATIENCE, restore_best_weights=True, verbose=0),
-        keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=PATIENCE//3, min_lr=1e-7, verbose=0),
+        # OneCycleLR-style: reduce LR faster for quick convergence
+        keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.3, patience=2, min_lr=1e-7, verbose=0),
     ]
 
 
 def evaluate(model, X_test, y_test, scaler):
+    """Evaluate model with comprehensive metrics including directional accuracy."""
     y_pred = model.predict(X_test, verbose=0).flatten()
     
-    scale = scaler.scale_[0]
-    center = scaler.center_[0]
+    # For log-returns, we evaluate on the normalized values directly
+    # since they represent returns, not absolute prices
+    y_true = y_test
+    y_pred_vals = y_pred
     
-    y_true_orig = y_test * scale + center
-    y_pred_orig = y_pred * scale + center
+    # Basic metrics on normalized log-returns
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred_vals))
+    mae = mean_absolute_error(y_true, y_pred_vals)
+    r2 = r2_score(y_true, y_pred_vals)
     
-    rmse = np.sqrt(mean_squared_error(y_true_orig, y_pred_orig))
-    mae = mean_absolute_error(y_true_orig, y_pred_orig)
-    r2 = r2_score(y_true_orig, y_pred_orig)
-    mape = np.mean(np.abs((y_true_orig - y_pred_orig) / (y_true_orig + 1e-8))) * 100
+    # ===== NEW METRICS FOR LOG-RETURNS =====
+    # Directional Accuracy: % of times we correctly predict the sign (up/down)
+    actual_direction = np.sign(y_true)
+    pred_direction = np.sign(y_pred_vals)
+    directional_accuracy = np.mean(actual_direction == pred_direction) * 100
+    
+    # Information Coefficient (IC): Spearman rank correlation
+    # Measures if we rank returns correctly, even if magnitudes are off
+    from scipy.stats import spearmanr
+    ic, ic_pvalue = spearmanr(y_true, y_pred_vals)
+    
+    # MAPE (less meaningful for returns, but kept for compatibility)
+    mape = np.mean(np.abs((y_true - y_pred_vals) / (np.abs(y_true) + 1e-8))) * 100
+    mape = min(mape, 999.9)  # Cap extreme values
     
     return {
         'rmse': rmse, 'mae': mae, 'mape': mape, 'r2': r2,
-        'y_pred': y_pred_orig, 'y_true': y_true_orig,
-        'errors': y_true_orig - y_pred_orig
+        'directional_acc': directional_accuracy,
+        'ic': ic, 'ic_pvalue': ic_pvalue,
+        'y_pred': y_pred_vals, 'y_true': y_true,
+        'errors': y_true - y_pred_vals
     }
 
 
-def main():
-    print("\n" + "=" * 70)
-    print("🚀 COMPREHENSIVE MODEL TRAINING - MAXIMUM PARAMETERS")
-    print("=" * 70)
-    
-    # Create directories
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    COMPARISON_DIR.mkdir(parents=True, exist_ok=True)
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    
-    # Load data
-    splits, scaler = load_data()
-    seq_len = splits['X_train'].shape[1]
-    n_feat = splits['X_train'].shape[2]
-    dates = splits['dates']
-    
-    # All models to train
+def train_single_model(name, splits, scaler, seq_len, n_feat, dates):
+    """Train a single model and generate its figures."""
+    # 7 core architectures for comprehensive time series forecasting
     MODELS = {
         'LSTM': build_lstm,
         'GRU': build_gru,
@@ -993,86 +998,130 @@ def main():
         'TCN': build_tcn,
         'WaveNet': build_wavenet,
         'NBEATS': build_nbeats,
-        'TFT': build_tft,
-        'ConvLSTM': build_conv_lstm,
-        'DenseNN': build_dense,
-        'Attention': build_attention_only,
+        'PatchTST': build_patchtst,
     }
     
+    if name not in MODELS:
+        print(f"❌ Unknown model: {name}")
+        print(f"   Available: {', '.join(MODELS.keys())}")
+        return None
+    
+    builder = MODELS[name]
+    model_fig_dir = FIGURES_DIR / name.lower()
+    model_fig_dir.mkdir(parents=True, exist_ok=True)
+    
+    print(f"\n{'='*60}")
+    print(f"🔧 Training {name}")
+    print('='*60)
+    
+    try:
+        model = builder(seq_len, n_feat)
+        param_count = model.count_params()
+        print(f"   Parameters: {param_count:,} ({param_count/1e6:.2f}M)")
+        
+        history = model.fit(
+            splits['train_ds'],
+            validation_data=splits['val_ds'],
+            epochs=EPOCHS,
+            callbacks=get_callbacks(name),
+            verbose=1
+        )
+        
+        metrics = evaluate(model, splits['X_test'], splits['y_test'], scaler)
+        
+        # Print metrics (now for log-returns, not prices)
+        print(f"\n   ✓ RMSE: {metrics['rmse']:.4f}")
+        print(f"   ✓ MAE:  {metrics['mae']:.4f}")
+        print(f"   ✓ R²:   {metrics['r2']:.4f}")
+        print(f"   ✓ Directional Accuracy: {metrics['directional_acc']:.1f}%")
+        print(f"   ✓ Information Coef (IC): {metrics['ic']:.4f}")
+        
+        # Plot individual model figures
+        plot_model_training(history.history, name, model_fig_dir)
+        plot_model_predictions(metrics['y_true'], metrics['y_pred'], dates, name, model_fig_dir)
+        plot_model_errors(metrics['errors'], name, model_fig_dir)
+        print(f"   ✓ Figures saved to: {model_fig_dir}")
+        
+        # Save model
+        model.save(MODEL_DIR / f"{name.lower()}.keras")
+        print(f"   ✓ Model saved to: {MODEL_DIR / f'{name.lower()}.keras'}")
+        
+        # Save individual results (including new metrics)
+        result = {
+            'model': name, 'rmse': metrics['rmse'], 'mae': metrics['mae'],
+            'mape': metrics['mape'], 'r2': metrics['r2'],
+            'directional_acc': metrics['directional_acc'],
+            'ic': metrics['ic'], 'ic_pvalue': metrics['ic_pvalue'],
+            'params': param_count, 'epochs': len(history.history['loss'])
+        }
+        result_file = REPORTS_DIR / f"{name.lower()}_results.json"
+        with open(result_file, 'w') as f:
+            json.dump(result, f, indent=2)
+        
+        return result
+        
+    except Exception as e:
+        print(f"   ❌ Error: {str(e)[:100]}")
+        import traceback
+        traceback.print_exc()
+        return None
+    finally:
+        keras.backend.clear_session()
+        import gc
+        gc.collect()
+        tf.keras.backend.clear_session()
+
+
+def generate_comparison():
+    """Generate comparison charts for all trained models."""
+    print("\n📊 Generating comprehensive comparison charts...")
+    
+    # Load all individual results
     all_results = []
-    predictions_dict = {}
-    errors_dict = {}
-    histories_dict = {}
-    y_true_final = None
+    for result_file in REPORTS_DIR.glob("*_results.json"):
+        if result_file.name != "all_models_results.csv":
+            with open(result_file, 'r') as f:
+                all_results.append(json.load(f))
     
-    for i, (name, builder) in enumerate(MODELS.items(), 1):
-        print(f"\n{'='*60}")
-        print(f"[{i}/{len(MODELS)}] 🔧 Training {name}")
-        print('='*60)
-        
-        # Create model folder
-        model_fig_dir = FIGURES_DIR / name.lower()
-        model_fig_dir.mkdir(parents=True, exist_ok=True)
-        
-        try:
-            model = builder(seq_len, n_feat)
-            param_count = model.count_params()
-            print(f"   Parameters: {param_count:,} ({param_count/1e6:.2f}M)")
-            
-            history = model.fit(
-                splits['X_train'], splits['y_train'],
-                validation_data=(splits['X_val'], splits['y_val']),
-                epochs=EPOCHS,
-                batch_size=BATCH_SIZE,
-                callbacks=get_callbacks(name),
-                verbose=1
-            )
-            
-            # Evaluate
-            metrics = evaluate(model, splits['X_test'], splits['y_test'], scaler)
-            
-            print(f"\n   ✓ RMSE: ${metrics['rmse']:.2f}")
-            print(f"   ✓ MAE:  ${metrics['mae']:.2f}")
-            print(f"   ✓ R²:   {metrics['r2']:.4f}")
-            
-            # Plot individual model figures
-            plot_model_training(history.history, name, model_fig_dir)
-            plot_model_predictions(metrics['y_true'], metrics['y_pred'], dates, name, model_fig_dir)
-            plot_model_errors(metrics['errors'], name, model_fig_dir)
-            print(f"   ✓ Figures saved to: {model_fig_dir}")
-            
-            # Save model
-            model.save(MODEL_DIR / f"{name.lower()}.keras")
-            
-            # Store for comparison
-            all_results.append({
-                'model': name, 'rmse': metrics['rmse'], 'mae': metrics['mae'],
-                'mape': metrics['mape'], 'r2': metrics['r2'],
-                'params': param_count, 'epochs': len(history.history['loss'])
-            })
-            predictions_dict[name] = metrics['y_pred']
-            errors_dict[name] = metrics['errors']
-            histories_dict[name] = history.history
-            y_true_final = metrics['y_true']
-            
-        except Exception as e:
-            print(f"   ❌ Error: {str(e)[:100]}")
-            import traceback
-            traceback.print_exc()
-            continue
+    if not all_results:
+        print("❌ No trained models found. Train models first.")
+        return
     
-    # Generate comprehensive comparison plots
-    print("\n📊 Generating comprehensive comparison plots...")
-    if all_results and y_true_final is not None:
-        plot_comprehensive_comparison(all_results, predictions_dict, errors_dict, histories_dict, y_true_final, dates)
-    
-    # Save results
+    # Sort by RMSE
     results_df = pd.DataFrame(all_results).sort_values('rmse')
     results_df.to_csv(REPORTS_DIR / "all_models_results.csv", index=False)
     
+    # Generate comparison plots (simplified - just the summary bar charts)
+    COMPARISON_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Bar chart comparison
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    models = results_df['model'].tolist()
+    colors = plt.cm.viridis(np.linspace(0, 1, len(models)))
+    
+    axes[0, 0].barh(models, results_df['rmse'], color=colors)
+    axes[0, 0].set_xlabel('RMSE')
+    axes[0, 0].set_title('RMSE by Model (lower is better)')
+    
+    axes[0, 1].barh(models, results_df['mae'], color=colors)
+    axes[0, 1].set_xlabel('MAE')
+    axes[0, 1].set_title('MAE by Model (lower is better)')
+    
+    axes[1, 0].barh(models, results_df['r2'], color=colors)
+    axes[1, 0].set_xlabel('R² Score')
+    axes[1, 0].set_title('R² by Model (higher is better)')
+    
+    axes[1, 1].barh(models, results_df['params']/1e6, color=colors)
+    axes[1, 1].set_xlabel('Parameters (Millions)')
+    axes[1, 1].set_title('Model Size')
+    
+    plt.tight_layout()
+    plt.savefig(COMPARISON_DIR / 'model_comparison.png', dpi=200, bbox_inches='tight')
+    plt.close()
+    
     # Summary
     print("\n" + "=" * 70)
-    print("📊 FINAL RESULTS")
+    print("📊 COMPARISON RESULTS")
     print("=" * 70)
     print("\n" + results_df[['model', 'rmse', 'mae', 'r2', 'params', 'epochs']].to_string(index=False))
     
@@ -1081,11 +1130,52 @@ def main():
         print(f"\n🏆 BEST MODEL: {best['model']} ({best['params']/1e6:.1f}M params)")
         print(f"   RMSE: ${best['rmse']:.2f}, R²: {best['r2']:.4f}")
     
-    print(f"\n📁 Figures: {FIGURES_DIR}")
-    print(f"📁 Comparison: {COMPARISON_DIR}")
-    print(f"📁 Models: {MODEL_DIR}")
+    print(f"\n📁 Comparison charts: {COMPARISON_DIR}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Train deep learning models for price prediction')
+    parser.add_argument('--model', type=str, help='Train a specific model (LSTM, GRU, Transformer, TCN, WaveNet, NBEATS, PatchTST)')
+    parser.add_argument('--compare', action='store_true', help='Generate comparison charts for all trained models')
+    parser.add_argument('--all', action='store_true', help='Train all models sequentially')
+    args = parser.parse_args()
+    
+    print("\n" + "=" * 70)
+    print("🚀 COMPREHENSIVE MODEL TRAINING - MAXIMUM PARAMETERS (FULL DATASET)")
     print("=" * 70)
+    
+    # Create directories
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    COMPARISON_DIR.mkdir(parents=True, exist_ok=True)
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    
+    if args.compare:
+        generate_comparison()
+        return
+    
+    # Load data
+    splits, scaler, n_feat = load_data()
+    seq_len = SEQUENCE_LENGTH
+    dates = splits['dates']
+    
+    if args.model:
+        # Train single model
+        train_single_model(args.model, splits, scaler, seq_len, n_feat, dates)
+    elif args.all:
+        # Train all models
+        all_models = ['LSTM', 'GRU', 'Transformer', 'TCN', 'WaveNet', 'NBEATS', 'PatchTST']  # 7 models
+        for i, name in enumerate(all_models, 1):
+            print(f"\n[{i}/{len(all_models)}] Training {name}...")
+            train_single_model(name, splits, scaler, seq_len, n_feat, dates)
+        generate_comparison()
+    else:
+        print("\nUsage:")
+        print("  python train_all.py --model LSTM     # Train single model")
+        print("  python train_all.py --all            # Train all models")
+        print("  python train_all.py --compare        # Generate comparison charts")
+        print("\nAvailable models: LSTM, GRU, Transformer, TCN, WaveNet, NBEATS, PatchTST")
 
 
 if __name__ == "__main__":
     main()
+

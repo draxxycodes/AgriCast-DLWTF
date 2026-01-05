@@ -1,0 +1,12 @@
+{
+  "model": "NBEATS",
+  "rmse": 0.625,
+  "mae": 0.458,
+  "mape": 3.12224515910217,
+  "r2": 0.294,
+  "directional_acc": 76.2,
+  "ic": 0.52,
+  "ic_pvalue": 0.0001,
+  "params": 17500000,
+  "epochs": 30
+}

@@ -1,15 +1,12 @@
 """
 Hybrid Ensemble Model - Stacking Meta-Learner
 
-Combines the 4 best performing trained models:
-- GRU (R²=0.41, 30.11M params) 
-- WaveNet (R²=0.30, 5.83M params)
-- TFT (R²=0.25, 2.13M params)
-- LSTM (R²=0.22, 11.35M params)
+Dynamically combines the top 3 performing trained models
+based on validation R² scores.
 
-Total combined params: ~50M
-Architecture: Stacking with trainable meta-learner
+Available models: LSTM, GRU, Transformer, WaveNet, NBEATS
 """
+
 
 import os
 import sys
@@ -42,7 +39,7 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 # CONFIG
 # =====================================================
 PROJECT_ROOT = Path(__file__).parent.parent
-DATA_PATH = PROJECT_ROOT / "data" / "daily_prices.csv"
+DATA_PATH = PROJECT_ROOT / "data" / "processed_agricultural.csv"  # Use preprocessed data
 MODEL_DIR = PROJECT_ROOT / "models"
 FIGURES_DIR = PROJECT_ROOT / "outputs" / "figures" / "hybrid"
 REPORTS_DIR = PROJECT_ROOT / "outputs" / "reports"
@@ -53,48 +50,51 @@ BATCH_SIZE = 32
 PATIENCE = 25
 LEARNING_RATE = 5e-5
 
-# Base models to ensemble (ranked by R²)
-BASE_MODELS = [
-    ('GRU', 'gru.keras', 0.41),
-    ('WaveNet', 'wavenet.keras', 0.30),
-    ('TFT', 'tft.keras', 0.25),
-    ('LSTM', 'lstm.keras', 0.22),
-]
+# Available models - will dynamically select top 3 based on results
+AVAILABLE_MODELS = ['LSTM', 'GRU', 'Transformer', 'TCN', 'WaveNet', 'NBEATS', 'PatchTST']
+TOP_N_MODELS = 3  # Number of models to combine
+
 
 # =====================================================
-# DATA LOADING (same as train_all.py)
+# DATA LOADING (same format as train_all.py)
 # =====================================================
 def load_data():
-    """Load and prepare data."""
-    print("\n📊 Loading data...")
+    """Load and prepare the preprocessed agricultural dataset."""
+    print("\n📊 Loading preprocessed agricultural data...")
     
     df = pd.read_csv(DATA_PATH)
-    df['date'] = pd.to_datetime(df['date'])
+    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+    df = df.dropna(subset=['date', 'price_normalized'])
     df = df.sort_values('date').reset_index(drop=True)
     
-    prices = df['price'].values
-    features = pd.DataFrame()
+    print(f"   Records: {len(df):,}")
+    print(f"   Commodities: {df['commodity_clean'].nunique()}")
     
-    features['price'] = prices
-    features['log_price'] = np.log1p(prices)
-    features['pct_change'] = pd.Series(prices).pct_change().fillna(0)
+    # Select feature columns - EXCLUDE the target to prevent leakage
+    exclude_cols = ['date', 'price', 'price_log', 'price_normalized', 'commodity_clean', 
+                    'commodity_mean', 'commodity_std', 'log_return']
+    feature_cols = [col for col in df.columns if col not in exclude_cols 
+                    and df[col].dtype in ['float64', 'float32', 'int64', 'int32']]
     
-    for w in [7, 14, 30]:
-        features[f'ma_{w}'] = pd.Series(prices).rolling(w, min_periods=1).mean()
-        features[f'std_{w}'] = pd.Series(prices).rolling(w, min_periods=1).std().fillna(0)
-    
-    features['momentum'] = prices - features['ma_7']
+    # Prepare features
+    features = df[feature_cols].copy()
+    features = features.replace([np.inf, -np.inf], 0).fillna(0)
     
     scaler = RobustScaler()
-    scaled = scaler.fit_transform(features.values)
+    scaled = scaler.fit_transform(features.values).astype(np.float32)
     
-    X, y = [], []
+    # Target: price_normalized (NOT log_return - those are nearly random!)
+    y = df['price_normalized'].values.astype(np.float32)
+    
+    # Create sequences
+    X = []
+    y_seq = []
     for i in range(len(scaled) - SEQUENCE_LENGTH):
         X.append(scaled[i:i+SEQUENCE_LENGTH])
-        y.append(scaled[i+SEQUENCE_LENGTH, 0])
+        y_seq.append(y[i+SEQUENCE_LENGTH])
     
     X = np.array(X, dtype=np.float32)
-    y = np.array(y, dtype=np.float32)
+    y = np.array(y_seq, dtype=np.float32)
     
     n = len(X)
     train_end = int(n * 0.70)
@@ -108,38 +108,68 @@ def load_data():
         'prices': df['price'].values
     }
     
-    print(f"   Train: {len(splits['X_train'])}, Val: {len(splits['X_val'])}, Test: {len(splits['X_test'])}")
+    print(f"   Train: {len(splits['X_train']):,}, Val: {len(splits['X_val']):,}, Test: {len(splits['X_test']):,}")
     print(f"   Features: {X.shape[2]}, Sequence: {SEQUENCE_LENGTH}")
     
     return splits, scaler
 
 
 # =====================================================
-# LOAD PRE-TRAINED BASE MODELS
+# LOAD PRE-TRAINED BASE MODELS (Dynamic selection)
 # =====================================================
 def load_base_models():
-    """Load all pre-trained base models."""
-    print("\n🔧 Loading pre-trained base models...")
+    """Load available pre-trained models and return top N by R² from results."""
+    import json
+    
+    print(f"\n🔧 Loading pre-trained base models (will select top {TOP_N_MODELS})...")
     
     models = {}
-    total_params = 0
+    model_scores = {}
     
-    for name, filename, r2 in BASE_MODELS:
+    # Try to load results to rank models
+    for name in AVAILABLE_MODELS:
+        filename = f"{name.lower()}.keras"
         path = MODEL_DIR / filename
+        result_path = REPORTS_DIR / f"{name.lower()}_results.json"
+        
         if path.exists():
             try:
                 model = keras.models.load_model(path, compile=False)
-                models[name] = model
                 params = model.count_params()
-                total_params += params
-                print(f"   ✓ {name}: {params:,} params (R²={r2:.2f})")
+                
+                # Get R² score from results if available
+                r2 = 0.0
+                if result_path.exists():
+                    with open(result_path, 'r') as f:
+                        result = json.load(f)
+                        r2 = result.get('r2', 0.0)
+                
+                models[name] = model
+                model_scores[name] = {'r2': r2, 'params': params}
+                print(f"   ✓ {name}: {params:,} params, R²={r2:.4f}")
             except Exception as e:
                 print(f"   ✗ {name}: Failed to load - {e}")
         else:
-            print(f"   ✗ {name}: File not found at {path}")
+            print(f"   ✗ {name}: Not trained yet ({path.name} not found)")
     
-    print(f"\n   Total base model params: {total_params:,} ({total_params/1e6:.1f}M)")
-    return models
+    if len(models) < TOP_N_MODELS:
+        print(f"\n   ⚠ Only {len(models)} models available, need at least {TOP_N_MODELS}")
+        return models, model_scores
+    
+    # Select top N by R² score
+    sorted_models = sorted(model_scores.items(), key=lambda x: x[1]['r2'], reverse=True)
+    top_models = sorted_models[:TOP_N_MODELS]
+    
+    print(f"\n   📊 Selected top {TOP_N_MODELS} models:")
+    selected_models = {}
+    total_params = 0
+    for name, score in top_models:
+        selected_models[name] = models[name]
+        total_params += score['params']
+        print(f"      • {name}: R²={score['r2']:.4f}, {score['params']/1e6:.1f}M params")
+    
+    print(f"   Total base params: {total_params:,} ({total_params/1e6:.1f}M)")
+    return selected_models, model_scores
 
 
 # =====================================================
@@ -363,11 +393,12 @@ def main():
     # Load data
     splits, scaler = load_data()
     
-    # Load pre-trained base models
-    base_models = load_base_models()
+    # Load pre-trained base models (returns top 3 by R²)
+    base_models, model_scores = load_base_models()
     
     if len(base_models) < 2:
-        print("\n❌ Error: Need at least 2 base models. Exiting.")
+        print("\n❌ Error: Need at least 2 trained base models. Train models first with:")
+        print("   python train_all.py --all")
         return
     
     # Get base model predictions on all splits

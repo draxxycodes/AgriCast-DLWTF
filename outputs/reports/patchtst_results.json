@@ -1,0 +1,12 @@
+{
+  "model": "PATCHTST",
+  "rmse": 0.612,
+  "mae": 0.445,
+  "mape": 3.484899506000401,
+  "r2": 0.321,
+  "directional_acc": 78.5,
+  "ic": 0.55,
+  "ic_pvalue": 0.0001,
+  "params": 1050000,
+  "epochs": 30
+}

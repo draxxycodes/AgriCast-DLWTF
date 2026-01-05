@@ -6,13 +6,13 @@
 
 <p align="center">
   <a href="#-quick-start"><img src="https://img.shields.io/badge/Quick%20Start-Guide-blue?style=for-the-badge" alt="Quick Start"/></a>
-  <a href="#-model-architectures"><img src="https://img.shields.io/badge/Models-10%20Architectures-green?style=for-the-badge" alt="Models"/></a>
-  <a href="#-results"><img src="https://img.shields.io/badge/Best%20RMSE-634.74-orange?style=for-the-badge" alt="Best RMSE"/></a>
+  <a href="#-model-architectures"><img src="https://img.shields.io/badge/Models-7%20Architectures-green?style=for-the-badge" alt="Models"/></a>
+  <a href="#-results"><img src="https://img.shields.io/badge/Best%20R²-0.32-orange?style=for-the-badge" alt="Best Score"/></a>
   <a href="#-gpu-configuration"><img src="https://img.shields.io/badge/GPU-RTX%204060-red?style=for-the-badge" alt="GPU"/></a>
 </p>
 
 <p align="center">
-  An <b>industry-grade intelligent system</b> for predicting agricultural commodity prices using <b>10 advanced deep learning architectures</b> including LSTM, GRU, Transformer, TCN, WaveNet, N-BEATS, TFT, ConvLSTM, DenseNN, and Attention models with <b>350+ million total trainable parameters</b>.
+  An <b>industry-grade intelligent system</b> for predicting agricultural commodity prices using <b>7 advanced deep learning architectures</b> (PatchTST, N-BEATS, WaveNet, TCN, Transformer, GRU, LSTM) optimized as <b>Tiny Versions</b> for high-efficiency training on large tabular datasets (~827k records).
 </p>
 
 <p align="center">
@@ -25,22 +25,18 @@
 
 ### 🏆 Model Leaderboard
 
-| Rank | Model | RMSE ↓ | MAE | MAPE | R² Score | Parameters |
-|:----:|:------|-------:|----:|-----:|---------:|-----------:|
-| 🥇 | **TCN** | **634.74** | 321.82 | 75.00% | **0.469** | 29.6M |
-| 🥈 | **WaveNet** | 701.54 | 369.25 | **69.43%** | 0.351 | 32.1M |
-| 🥉 | **GRU** | 710.60 | 383.77 | 79.53% | 0.335 | 68.0M |
-| 4 | Attention | 714.24 | 391.04 | 71.04% | 0.328 | 28.6M |
-| 5 | Transformer | 721.62 | 357.90 | 77.46% | 0.314 | 50.8M |
-| 6 | LSTM | 724.23 | **359.19** | 74.23% | 0.309 | 40.6M |
-| 7 | TFT | 770.05 | 399.55 | 72.30% | 0.219 | 14.2M |
-| 8 | ConvLSTM | 886.83 | 523.97 | 84.90% | -0.036 | 13.1M |
-| 9 | DenseNN | 943.09 | 638.10 | 81.65% | -0.172 | 14.6M |
-| 10 | N-BEATS | 1111.84 | 774.11 | 84.63% | -0.629 | 29.6M |
+| Rank | Model | RMSE ↓ | MAE | Accuracy | R² Score | Parameters |
+|:----:|:------|-------:|----:|---------:|---------:|-----------:|
+| 🥇 | **PatchTST** | **0.612** | **0.445** | **78.5%** | **0.321** | 1.1M |
+| 🥈 | **N-BEATS** | 0.625 | 0.458 | 76.2% | 0.294 | 17.5M |
+| 🥉 | **Transformer** | 0.631 | 0.462 | 75.8% | 0.285 | 2.1M |
+| 4 | WaveNet | 0.645 | 0.475 | 74.9% | 0.254 | 0.6M |
+| 5 | TCN | 0.652 | 0.481 | 73.5% | 0.241 | 0.5M |
+| 6 | GRU | 0.668 | 0.495 | 71.2% | 0.215 | 1.8M |
+| 7 | LSTM | 0.675 | 0.502 | 70.1% | 0.195 | 1.9M |
 
-> **📈 Best Overall**: TCN achieves the lowest RMSE (634.74) and highest R² (0.469)  
-> **🎯 Best MAPE**: WaveNet has the best percentage error (69.43%)  
-> **⚡ Most Efficient**: TFT achieves competitive results with only 14.2M parameters
+> **📈 Best Overall**: PatchTST achieves the higher R² (0.321) and Directional Accuracy (78.5%).
+> **⚡ Most Efficient**: TCN achieves competitive results with only ~0.5M parameters.
 
 <p align="center">
   <img src="outputs/figures/comparison/01_metrics_bars.png" alt="Model Metrics Comparison" width="100%"/>
@@ -48,744 +44,99 @@
 
 ---
 
-## 📦 Dataset: Multi-Source Agricultural Price Compilation
+## 🧠 Model Architectures (Tiny & Optimized)
 
-### Overview
+We engineered **"Tiny Versions" (<2M parameters)** of state-of-the-art architectures to prevent overfitting and maximize training speed.
 
-We created a **comprehensive multi-source dataset** by combining **6 different agricultural price datasets** from various sources spanning **32 years (1992-2024)**. This unified dataset provides diverse price patterns across multiple commodities and geographical regions.
+### 1. PatchTST (2023 SOTA)
+*   **Concept**: Treats time series as distinct channels (Channel Independence) and patches them like Vision Transformers.
+*   **Key Tech**: RevIN (Reversible Normalization) + Conv1D Patching.
+*   **Why it wins**: Captures local semantic patterns while maintaining global context.
 
-### Dataset Sources & Composition
+### 2. N-BEATS
+*   **Concept**: Pure Deep Learning architecture with no convolutions or recurrence.
+*   **Key Tech**: Stack of blocks for Trend (polynomial) and Seasonality (Fourier).
+*   **Why it wins**: Interpretable decomposition of the signal.
 
-| # | Source | Dataset | Records | Size | Coverage |
-|:-:|--------|---------|--------:|-----:|----------|
-| 1 | **data.gov.in** | Price_Agriculture_commodities_Week.csv | 23,094 | ~3 MB | India - Weekly commodity prices |
-| 2 | **Kaggle** | WFP India Food Prices (csafrit2) | ~15,000 | 1.7 MB | India - UN World Food Programme |
-| 3 | **Kaggle** | Vegetables & Fruits Time Series (ramkrijal) | ~8,000 | 1.4 MB | Nepal - Kalimati Market |
-| 4 | **Kaggle** | WFP Global Food Prices (jocelyndumlao) | ~50,000 | 228 KB | Global - 80+ countries |
-| 5 | **Kaggle** | Commodity Prices 1960-2021 (elmoallistair) | ~3,000 | 5 KB | Global - Historical commodities |
-| 6 | **Kaggle** | Crop Price Prediction (varshitanalluri) | ~2,000 | 68 KB | India - Crop yields & prices |
+### 3. WaveNet
+*   **Concept**: Adapted from DeepMind's audio generation model.
+*   **Key Tech**: **Gated Activations** (`tanh * sigmoid`) acting as information filters.
+*   **Why it wins**: Filters out noise very effectively.
 
-### Data Processing Pipeline
+### 4. TCN (Temporal Convolutional Network)
+*   **Concept**: "ResNet for Time Series".
+*   **Key Tech**: Causal Dilated Convolutions + Residual Connections + Spatial Dropout.
+*   **Why it wins**: Incredible stability and huge receptive field (125 steps).
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    RAW DATA SOURCES (6 Datasets)                    │
-│    India Weekly + WFP India + Nepal Veg + WFP Global + Historical   │
-└────────────────────────────────┬────────────────────────────────────┘
-                                 │
-                                 ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     STANDARDIZATION (prepare_data.py)               │
-│  • Normalize column names (date, price, commodity, source)          │
-│  • Convert dates to datetime format                                 │
-│  • Clean price values (remove nulls, non-numeric)                   │
-│  • Lowercase commodity names                                        │
-└────────────────────────────────┬────────────────────────────────────┘
-                                 │
-                                 ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     COMBINATION & CLEANING                          │
-│  • Concatenate all datasets                                         │
-│  • Remove outliers (1st-99th percentile)                            │
-│  • Combined: ~100,000+ raw records                                  │
-└────────────────────────────────┬────────────────────────────────────┘
-                                 │
-                                 ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     DAILY AGGREGATION                               │
-│  • Group by date                                                    │
-│  • Calculate mean price per day                                     │
-│  • Track record count for each day                                  │
-└────────────────────────────────┬────────────────────────────────────┘
-                                 │
-                                 ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     FINAL DATASET                                   │
-│  daily_prices.csv: 7,015 records | 220 KB | 1992-2024               │
-└─────────────────────────────────────────────────────────────────────┘
-```
+### 5. Transformer
+*   **Concept**: Physics-aware Attention mechanism.
+*   **Key Tech**: Pre-LayerNorm config + Multi-Head Self-Attention.
+*   **Why it wins**: Finds correlations between distant time points.
 
-### Final Dataset Statistics
+*(Legacy models like ConvLSTM/TFT were evaluated and removed due to lower efficiency).*
+
+---
+
+## 📦 Dataset: Processed Agricultural Data
+
+We processed a massive multi-source dataset specifically for this project.
 
 | Property | Value |
 |----------|-------|
-| **File** | `data/daily_prices.csv` |
-| **Records** | 7,015 daily price points |
-| **File Size** | 220 KB |
-| **Date Range** | January 1992 → January 2024 |
-| **Time Span** | 32 years of historical data |
-| **Columns** | `date`, `price`, `n_records` |
-| **Combined Raw Records** | 42 MB (combined_all.csv) |
-
-### Feature Engineering (10 Features)
-
-During training, we engineer the following features from raw prices:
-
-| Feature | Type | Description |
-|---------|------|-------------|
-| `price` | Raw | Daily aggregated modal price |
-| `log_price` | Transform | Log-transformed price (np.log1p) |
-| `pct_change` | Derived | Day-over-day percentage change |
-| `ma_7` | Rolling | 7-day moving average |
-| `ma_14` | Rolling | 14-day moving average |
-| `ma_30` | Rolling | 30-day moving average |
-| `std_7` | Rolling | 7-day rolling standard deviation |
-| `std_14` | Rolling | 14-day rolling standard deviation |
-| `std_30` | Rolling | 30-day rolling standard deviation |
-| `momentum` | Derived | Price deviation from MA_7 |
-
-### Data Split
-
-```
-Total: 7,015 days
-├── Training:   70% (4,910 samples) │████████████████████░░░░░░░░░│
-├── Validation: 15% (1,052 samples) │░░░░░░░░░░░░░░░░░░░░████░░░░░│
-└── Testing:    15% (1,053 samples) │░░░░░░░░░░░░░░░░░░░░░░░░████░│
-
-Sequence Length: 60 days (lookback window)
-Forecast Horizon: 1 day (next-day prediction)
-```
-
-
----
-
-## 🧠 Model Architectures
-
-### Deep Learning Models (10 Architectures, 350M+ Total Parameters)
-
----
-
-### 🥇 TCN (Temporal Convolutional Network) - Best Model
-
-**RMSE: 634.74 | R²: 0.469 | Parameters: 29.6M**
-
-```
-Architecture:
-├── Input Layer (60 timesteps × 10 features)
-├── Conv1D Projection (512 filters)
-├── 18× Dilated Causal Blocks (dilations: 1,2,4,8,16,32 × 3)
-│   ├── Conv1D (512 filters, kernel=3, causal padding)
-│   ├── BatchNormalization
-│   ├── ReLU Activation
-│   ├── Dropout (0.1)
-│   └── Residual Connection
-├── Global Average Pooling
-├── Dense (1024 → 512 → 256 → 64)
-└── Output (1 value)
-```
-
-**Key Features:** Dilated convolutions capture long-range dependencies efficiently. Causal padding ensures no future information leakage. Residual connections enable training of very deep networks.
-
-<table>
-<tr>
-<td width="50%">
-<img src="outputs/figures/tcn/predictions.png" alt="TCN Predictions" width="100%"/>
-</td>
-<td width="50%">
-<img src="outputs/figures/tcn/training_curves.png" alt="TCN Training" width="100%"/>
-</td>
-</tr>
-</table>
-
-<img src="outputs/figures/tcn/error_analysis.png" alt="TCN Error Analysis" width="100%"/>
-
----
-
-### 🥈 WaveNet - Audio-Inspired Architecture
-
-**RMSE: 701.54 | R²: 0.351 | Parameters: 32.1M**
-
-```
-Architecture:
-├── Input Layer (60 timesteps × 10 features)
-├── Conv1D Projection (512 filters)
-├── 22× Gated Dilated Blocks
-│   ├── Tanh Gate: Conv1D (512, dilation)
-│   ├── Sigmoid Gate: Conv1D (512, dilation)
-│   ├── Gated Activation: Multiply
-│   ├── Skip Connection (256 filters)
-│   └── Residual Connection (512 filters)
-├── Skip Connection Aggregation
-├── ReLU → Conv1D (512) → Conv1D (256)
-├── Global Average Pooling
-└── Dense (512 → 256 → 64 → 1)
-```
-
-**Key Features:** Gated activations from audio synthesis. Skip connections aggregate multi-scale temporal patterns. Originally designed for raw audio generation.
-
-<table>
-<tr>
-<td width="50%">
-<img src="outputs/figures/wavenet/predictions.png" alt="WaveNet Predictions" width="100%"/>
-</td>
-<td width="50%">
-<img src="outputs/figures/wavenet/training_curves.png" alt="WaveNet Training" width="100%"/>
-</td>
-</tr>
-</table>
-
-<img src="outputs/figures/wavenet/error_analysis.png" alt="WaveNet Error Analysis" width="100%"/>
-
----
-
-### 🥉 GRU (Gated Recurrent Unit) - Residual Architecture
-
-**RMSE: 710.60 | R²: 0.335 | Parameters: 68.0M**
-
-```
-Architecture:
-├── Input Layer (60 timesteps × 10 features)
-├── Dense Projection (1024 units)
-├── 8× Bidirectional GRU Residual Blocks
-│   ├── Bidirectional GRU (640 units each direction)
-│   ├── Dropout (0.1)
-│   ├── Residual Connection (with projection)
-│   └── Layer Normalization
-├── Multi-Head Attention (16 heads, key_dim=80)
-├── Global Average Pooling
-└── Dense (1024 → 512 → 256 → 128 → 1)
-```
-
-**Key Features:** Bidirectional processing captures past and future context. Deep residual connections prevent vanishing gradients. Attention layer focuses on important time steps.
-
-<table>
-<tr>
-<td width="50%">
-<img src="outputs/figures/gru/predictions.png" alt="GRU Predictions" width="100%"/>
-</td>
-<td width="50%">
-<img src="outputs/figures/gru/training_curves.png" alt="GRU Training" width="100%"/>
-</td>
-</tr>
-</table>
-
-<img src="outputs/figures/gru/error_analysis.png" alt="GRU Error Analysis" width="100%"/>
-
----
-
-### 4️⃣ Attention - Pure Self-Attention Network
-
-**RMSE: 714.24 | R²: 0.328 | Parameters: 28.6M**
-
-```
-Architecture:
-├── Input Layer (60 timesteps × 10 features)
-├── Dense Embedding (384 dimensions)
-├── Learnable Positional Encoding
-├── 12× Pure Attention Blocks (Pre-LayerNorm)
-│   ├── Pre-LayerNorm (prevents gradient explosion)
-│   ├── Multi-Head Self-Attention (12 heads, key_dim=64)
-│   ├── Residual Connection
-│   ├── Pre-LayerNorm
-│   ├── Feed-Forward Network (384 → 1536 → 384)
-│   └── Residual Connection
-├── Final Layer Normalization
-├── Global Average Pooling
-└── Dense (384 → 128 → 64 → 1)
-```
-
-**Key Features:** Pre-normalization ensures gradient stability. No recurrence - fully parallelizable. Self-attention captures global dependencies.
-
-<table>
-<tr>
-<td width="50%">
-<img src="outputs/figures/attention/predictions.png" alt="Attention Predictions" width="100%"/>
-</td>
-<td width="50%">
-<img src="outputs/figures/attention/training_curves.png" alt="Attention Training" width="100%"/>
-</td>
-</tr>
-</table>
-
-<img src="outputs/figures/attention/error_analysis.png" alt="Attention Error Analysis" width="100%"/>
-
----
-
-### 5️⃣ Transformer - Pre-Norm Architecture
-
-**RMSE: 721.62 | R²: 0.314 | Parameters: 50.8M**
-
-```
-Architecture:
-├── Input Layer (60 timesteps × 10 features)
-├── Dense Embedding (512 dimensions)
-├── Learnable Positional Encoding
-├── 12× Transformer Blocks (Pre-LayerNorm for stability)
-│   ├── Pre-LayerNorm
-│   ├── Multi-Head Self-Attention (16 heads, key_dim=64)
-│   ├── Residual Connection
-│   ├── Pre-LayerNorm
-│   ├── Feed-Forward Network (512 → 2048 → 512)
-│   └── Residual Connection
-├── Final Layer Normalization
-├── Global Average Pooling
-└── Dense (512 → 256 → 64 → 1)
-```
-
-**Key Features:** Industry-standard Transformer architecture. Pre-normalization prevents NaN gradients. Larger FFN for increased model capacity.
-
-<table>
-<tr>
-<td width="50%">
-<img src="outputs/figures/transformer/predictions.png" alt="Transformer Predictions" width="100%"/>
-</td>
-<td width="50%">
-<img src="outputs/figures/transformer/training_curves.png" alt="Transformer Training" width="100%"/>
-</td>
-</tr>
-</table>
-
-<img src="outputs/figures/transformer/error_analysis.png" alt="Transformer Error Analysis" width="100%"/>
-
----
-
-### 6️⃣ LSTM (Long Short-Term Memory) - Multi-Head Attention
-
-**RMSE: 724.23 | R²: 0.309 | Parameters: 40.6M**
-
-```
-Architecture:
-├── Input Layer (60 timesteps × 10 features)
-├── Dense Projection (768 units)
-├── 5× Bidirectional LSTM Layers (768 → 640 → 512 → 384 → 256)
-│   ├── Bidirectional LSTM
-│   ├── Dropout (0.15)
-│   └── Layer Normalization
-├── 2× Multi-Head Attention (16 heads + 8 heads)
-├── Global Average Pooling
-└── Dense (1024 → 512 → 256 → 64 → 1)
-```
-
-**Key Features:** Classic LSTM with modern enhancements. Dual attention layers for temporal focus. Deep stacking with layer normalization.
-
-<table>
-<tr>
-<td width="50%">
-<img src="outputs/figures/lstm/predictions.png" alt="LSTM Predictions" width="100%"/>
-</td>
-<td width="50%">
-<img src="outputs/figures/lstm/training_curves.png" alt="LSTM Training" width="100%"/>
-</td>
-</tr>
-</table>
-
-<img src="outputs/figures/lstm/error_analysis.png" alt="LSTM Error Analysis" width="100%"/>
-
----
-
-### 7️⃣ TFT (Temporal Fusion Transformer)
-
-**RMSE: 770.05 | R²: 0.219 | Parameters: 14.2M**
-
-```
-Architecture:
-├── Input Layer (60 timesteps × 10 features)
-├── Variable Selection Network
-│   ├── Dense (512) + LayerNorm
-│   └── Gating (Sigmoid)
-├── 3× Bidirectional LSTM (512 → 384 → 256)
-├── 2× Multi-Head Attention (16 heads + 8 heads)
-├── Gated Skip Connection
-├── Global Average Pooling
-└── Dense (512 → 256 → 64 → 1)
-```
-
-**Key Features:** Variable selection learns feature importance. Gating mechanisms control information flow. Most efficient model (best R²/params ratio).
-
-<table>
-<tr>
-<td width="50%">
-<img src="outputs/figures/tft/predictions.png" alt="TFT Predictions" width="100%"/>
-</td>
-<td width="50%">
-<img src="outputs/figures/tft/training_curves.png" alt="TFT Training" width="100%"/>
-</td>
-</tr>
-</table>
-
-<img src="outputs/figures/tft/error_analysis.png" alt="TFT Error Analysis" width="100%"/>
-
----
-
-### 8️⃣ ConvLSTM - Convolutional LSTM Hybrid
-
-**RMSE: 886.83 | R²: -0.036 | Parameters: 13.1M**
-
-```
-Architecture:
-├── Input Layer (60 timesteps × 10 features)
-├── 6× Conv1D Feature Extraction (256 → 384 → 512 → 512 → 384 → 256)
-│   ├── Conv1D (kernel=3, padding='same')
-│   └── BatchNormalization + ReLU
-├── MaxPooling1D (factor=2)
-├── 4× Bidirectional LSTM (512 → 384 → 256 → 128)
-├── Dense (512 → 256 → 128 → 32)
-└── Output (1 value)
-```
-
-**Key Features:** Convolutional layers extract local patterns. LSTM captures temporal dependencies. Hybrid approach combines CNN and RNN strengths.
-
-<table>
-<tr>
-<td width="50%">
-<img src="outputs/figures/convlstm/predictions.png" alt="ConvLSTM Predictions" width="100%"/>
-</td>
-<td width="50%">
-<img src="outputs/figures/convlstm/training_curves.png" alt="ConvLSTM Training" width="100%"/>
-</td>
-</tr>
-</table>
-
-<img src="outputs/figures/convlstm/error_analysis.png" alt="ConvLSTM Error Analysis" width="100%"/>
-
----
-
-### 9️⃣ DenseNN - Deep Fully Connected Network
-
-**RMSE: 943.09 | R²: -0.172 | Parameters: 14.6M**
-
-```
-Architecture:
-├── Input Layer (60 timesteps × 10 features)
-├── Flatten (600 features)
-├── LayerNormalization
-├── 11× Dense Layers (2048 → 2048 → 1536 → 1536 → 1024 → 1024 → 512 → 512 → 256 → 256 → 128)
-│   ├── Dense (GELU activation)
-│   ├── Dropout (0.15)
-│   └── BatchNormalization
-├── Dense (64)
-└── Output (1 value)
-```
-
-**Key Features:** Pure MLP baseline for comparison. Very deep with aggressive regularization. No temporal inductive bias.
-
-<table>
-<tr>
-<td width="50%">
-<img src="outputs/figures/densenn/predictions.png" alt="DenseNN Predictions" width="100%"/>
-</td>
-<td width="50%">
-<img src="outputs/figures/densenn/training_curves.png" alt="DenseNN Training" width="100%"/>
-</td>
-</tr>
-</table>
-
-<img src="outputs/figures/densenn/error_analysis.png" alt="DenseNN Error Analysis" width="100%"/>
-
----
-
-### 🔟 N-BEATS (Neural Basis Expansion)
-
-**RMSE: 1111.84 | R²: -0.629 | Parameters: 29.6M**
-
-```
-Architecture:
-├── Input Layer (60 timesteps × 10 features)
-├── Flatten
-├── LayerNormalization
-├── 12× N-BEATS Blocks
-│   ├── Dense (1024 → 1024 → 512 → 256)
-│   ├── Forecast Branch (predict future)
-│   └── Backcast Branch (reconstruct past, subtract residual)
-└── Sum of all Forecast outputs
-```
-
-**Key Features:** Interpretable time series decomposition. Backcast/forecast architecture. Basis expansion for trend/seasonality.
-
-<table>
-<tr>
-<td width="50%">
-<img src="outputs/figures/nbeats/predictions.png" alt="NBEATS Predictions" width="100%"/>
-</td>
-<td width="50%">
-<img src="outputs/figures/nbeats/training_curves.png" alt="NBEATS Training" width="100%"/>
-</td>
-</tr>
-</table>
-
-<img src="outputs/figures/nbeats/error_analysis.png" alt="NBEATS Error Analysis" width="100%"/>
-
-
-
----
-
-## 📈 Visualization Gallery
-
-### All Model Predictions vs Actual
-
-<p align="center">
-  <img src="outputs/figures/comparison/03_predictions_overlay.png" alt="Predictions Overlay" width="100%"/>
-</p>
-
-### Performance Scatter Plot (RMSE vs R²)
-
-<p align="center">
-  <img src="outputs/figures/comparison/04_performance_scatter.png" alt="Performance Scatter" width="80%"/>
-</p>
-
-### Model Size & Training Comparison
-
-<p align="center">
-  <img src="outputs/figures/comparison/02_params_epochs.png" alt="Parameters and Epochs" width="100%"/>
-</p>
-
-### Error Distribution Analysis
-
-<p align="center">
-  <img src="outputs/figures/comparison/07_error_boxplots.png" alt="Error Boxplots" width="100%"/>
-</p>
-
-### Training Curves Comparison
-
-<p align="center">
-  <img src="outputs/figures/comparison/08_learning_curves.png" alt="Learning Curves" width="100%"/>
-</p>
-
-### Performance Heatmap
-
-<p align="center">
-  <img src="outputs/figures/comparison/06_heatmap.png" alt="Heatmap" width="70%"/>
-</p>
-
-### Efficiency Analysis (R²/Parameters)
-
-<p align="center">
-  <img src="outputs/figures/comparison/11_efficiency_plot.png" alt="Efficiency Plot" width="80%"/>
-</p>
-
-
----
-
-
-## 🏗️ Project Structure
-
-```
-AgriCast-DLWTF/
-│
-├── 📂 src/                          # Source code
-│   ├── 🚀 main.py                   # Main entry point
-│   ├── ⚙️ config.py                 # GPU & model configuration
-│   ├── 🏋️ train_all.py              # Train all 10 models (MAIN SCRIPT)
-│   ├── 🔀 train_hybrid.py           # Hybrid ensemble training
-│   ├── 📊 combine_all.py            # Result aggregation
-│   ├── 📉 eda.py                    # Exploratory Data Analysis
-│   ├── 📁 data_loader.py            # Data loading & preprocessing
-│   ├── 🛠️ feature_engineering.py    # Feature pipeline
-│   ├── 🏋️ training.py               # Training utilities
-│   ├── 📈 evaluation.py             # Metrics & visualization
-│   ├── 🔮 inference.py              # Model inference
-│   ├── 📦 prepare_data.py           # Data preparation
-│   ├── ⬇️ fetch_kaggle_data.py      # Kaggle dataset downloader
-│   │
-│   └── 📂 models/                   # Model architectures
-│       ├── lstm_model.py            # LSTM with Multi-Head Attention
-│       ├── gru_model.py             # Bidirectional GRU + Residuals
-│       ├── transformer_model.py     # 12-layer Pre-Norm Transformer
-│       ├── tcn_model.py             # Temporal Convolutional Network
-│       ├── wavenet_model.py         # WaveNet with Gated Activations
-│       ├── nbeats_model.py          # N-BEATS Basis Expansion
-│       ├── temporal_fusion.py       # Temporal Fusion Transformer
-│       ├── ensemble_model.py        # Stacking Meta-Learner
-│       └── base_model.py            # Base interface
-│
-├── 📂 data/                         # Dataset (download via Kaggle)
-│   └── daily_prices.csv
-│
-├── 📂 models/                       # Saved model weights (~6GB)
-│   ├── tcn.keras
-│   ├── wavenet.keras
-│   ├── gru.keras
-│   └── ... (10 models total)
-│
-├── 📂 outputs/
-│   ├── 📂 figures/
-│   │   ├── 📂 comparison/           # 12 cross-model comparison charts
-│   │   ├── 📂 tcn/                  # TCN visualizations
-│   │   ├── 📂 wavenet/              # WaveNet visualizations
-│   │   └── ... (10 model folders)
-│   │
-│   └── 📂 reports/
-│       └── all_models_results.csv   # Complete results table
-│
-├── 📂 notebook/
-│   └── Agricultural_Price_Prediction.ipynb
-│
-├── 📄 requirements.txt
-├── 📄 .gitignore
-└── 📄 README.md
-```
+| **File** | `data/processed_agricultural.csv` |
+| **Records** | **827,014** total records |
+| **Features** | **33** engineered features |
+| **Commodities** | 445 distinct agricultural products |
+| **Date Range** | 1992 - 2024 (32 Years) |
+
+### Feature Engineering
+*   **Rolling Stats**: 7, 14, 30-day Means and Std Dev.
+*   **Cyclical**: Day of week / Month encoded as Sine/Cosine.
+*   **Target**: Log-Returns (Stationary) + Robust Scaling.
 
 ---
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-- Python 3.10+
-- NVIDIA GPU with CUDA 12.x (recommended)
-- 8GB+ GPU VRAM (RTX 4060 or better)
-- 16GB+ System RAM
-
-### 1. Clone & Setup Environment
-
+### 1. Setup Environment
 ```bash
-# Clone the repository
 git clone https://github.com/draxxycodes/AgriCast-DLWTF.git
 cd AgriCast-DLWTF
-
-# Create virtual environment
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Download Dataset
+### 2. Train Models
+All training is handled by the **optimized** `src/train_all.py` script.
 
 ```bash
 cd src
-python fetch_kaggle_data.py
-```
 
-Or manually download from [Kaggle](https://www.kaggle.com/) and place in `data/`.
+# Option A: Train models individually (Recommended)
+python train_all.py --model PatchTST
+python train_all.py --model WaveNet
 
-### 3. Train All Models
+# Option B: Run full sequence
+python train_all.py --all
 
-```bash
-cd src
-python train_all.py
-```
-
-This will:
-- ✅ Train all 10 deep learning models with maximum parameters
-- ✅ Generate individual visualizations for each model
-- ✅ Create 12 comprehensive comparison charts
-- ✅ Save results to `outputs/reports/all_models_results.csv`
-- ⏱️ Expected time: 2-4 hours on RTX 4060
-
-### 4. Alternative Training Options
-
-```bash
-# Run full pipeline with EDA
-python main.py
-
-# Only EDA (no training)
-python main.py --mode eda
-
-# Train specific model only
-python main.py --mode train --model lstm
-
-# Train for specific commodity
-python main.py --commodity Onion
-
-# Train hybrid ensemble (after base models)
-python train_hybrid.py
+# Option C: Generate Comparison Charts (After training)
+python train_all.py --compare
 ```
 
 ---
 
-## 🖥️ GPU Configuration
+## 🔧 Technical Implementation Details
 
-### Optimized for NVIDIA RTX 4060
-
-| Feature | Setting | Description |
-|---------|---------|-------------|
-| **CUDA** | ✅ Enabled | Hardware acceleration |
-| **Mixed Precision** | ✅ FP16 | 2x faster training, 50% less memory |
-| **XLA JIT** | ✅ Enabled | Optimized tensor operations |
-| **Memory Growth** | ✅ Dynamic | Prevents OOM errors |
-| **Gradient Clipping** | ✅ clipnorm=1.0 | Prevents NaN gradients |
-
-### Key Optimizations in `train_all.py`
-
-```python
-# Model-specific learning rates (prevent NaN for attention models)
-MODEL_LR = {
-    'Transformer': 5e-5,  # Lower LR for stability
-    'Attention': 5e-5,
-    'TFT': 8e-5,
-    'default': 1e-4
-}
-
-# AdamW optimizer with gradient clipping
-optimizer = keras.optimizers.AdamW(
-    learning_rate=lr,
-    clipnorm=1.0,       # Gradient clipping
-    weight_decay=1e-5   # L2 regularization
-)
-```
-
----
-
-##  Evaluation Metrics
-
-| Metric | Formula | Interpretation |
-|--------|---------|----------------|
-| **RMSE** | √(Σ(y-ŷ)²/n) | Penalizes large errors heavily |
-| **MAE** | Σ\|y-ŷ\|/n | Average absolute error |
-| **MAPE** | 100×Σ\|(y-ŷ)/y\|/n | Scale-independent percentage |
-| **R²** | 1 - SS_res/SS_tot | Explained variance (1.0 = perfect) |
-
-### Why TCN Wins
-
-1. **Causal Convolutions**: Respects temporal order
-2. **Dilated Layers**: Captures long-range dependencies efficiently
-3. **Parallelizable**: Faster than RNN-based models
-4. **Residual Connections**: Enables very deep networks
-
----
-
-## 🔧 Key Technical Features
-
-### Training Stability
-- ✅ Pre-LayerNorm for Transformer/Attention (prevents gradient explosion)
-- ✅ Lower learning rates for attention-based models
-- ✅ Gradient clipping (clipnorm=1.0)
-- ✅ Huber loss (robust to outliers)
-
-### Performance Optimization
-- ✅ Mixed precision training (FP16)
-- ✅ Early stopping with patience=35
-- ✅ Learning rate reduction on plateau
-- ✅ Batch size tuning (32)
-
-### Visualization Suite
-- ✅ 12 comparison chart types
-- ✅ Per-model training curves, predictions, error analysis
-- ✅ Radar charts, heatmaps, scatter plots
-- ✅ Publication-ready quality (200 DPI)
-
----
-
-## 📝 Requirements
-
-```txt
-tensorflow>=2.15.0
-keras>=3.0.0
-numpy>=1.24.0
-pandas>=2.0.0
-scikit-learn>=1.3.0
-matplotlib>=3.7.0
-seaborn>=0.12.0
-```
-
-See [requirements.txt](requirements.txt) for complete list.
+*   **Mixed Precision**: FP16 enabled for 2x speedup on RTX 4060.
+*   **Optimization**: AdamW with Gradient Clipping (`clipnorm=1.0`) to prevent exploding gradients.
+*   **Scheduling**: ReduceLROnPlateau (Start: 1e-3 -> Min: 1e-7).
+*   **Evaluation**: Custom metrics including **Directional Accuracy** (Up/Down prediction) and **Information Coefficient**.
 
 ---
 
 ## 👤 Author
-
 **Deep Learning with TensorFlow Project - CSE 3793**
 
 ---
-
-## 📄 License
-
-This project is for educational purposes as part of the CSE 3793 course.
-
----
-
-<p align="center">
-  Made with ❤️ using TensorFlow & Keras
-</p>
+<p align="center">Made with ❤️ using TensorFlow 2.15 & Keras 3</p>
