@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  An <b>industry-grade intelligent system</b> for predicting agricultural commodity prices using <b>7 advanced deep learning architectures</b> (PatchTST, N-BEATS, WaveNet, TCN, Transformer, GRU, LSTM) optimized as <b>Tiny Versions</b> for high-efficiency training on large tabular datasets (~827k records).
+  An <b>industry-grade intelligent system</b> for predicting agricultural commodity prices using <b>7 advanced deep learning architectures</b> including PatchTST, N-BEATS, WaveNet, TCN, Transformer, GRU, and LSTM. Optimized as <b>"Tiny Versions"</b> (< 2M parameters) for maximum efficiency on large tabular datasets (~827k records).
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@
 | 6 | GRU | 0.668 | 0.495 | 71.2% | 0.215 | 1.8M |
 | 7 | LSTM | 0.675 | 0.502 | 70.1% | 0.195 | 1.9M |
 
-> **📈 Best Overall**: PatchTST achieves the higher R² (0.321) and Directional Accuracy (78.5%).
+> **📈 Best Overall**: PatchTST achieves the highest R² (0.321) and Directional Accuracy (78.5%).
 > **⚡ Most Efficient**: TCN achieves competitive results with only ~0.5M parameters.
 
 <p align="center">
@@ -48,32 +48,164 @@
 
 We engineered **"Tiny Versions" (<2M parameters)** of state-of-the-art architectures to prevent overfitting and maximize training speed.
 
-### 1. PatchTST (2023 SOTA)
-*   **Concept**: Treats time series as distinct channels (Channel Independence) and patches them like Vision Transformers.
-*   **Key Tech**: RevIN (Reversible Normalization) + Conv1D Patching.
-*   **Why it wins**: Captures local semantic patterns while maintaining global context.
+### 🥇 PatchTST (2023 SOTA) - Best Model
 
-### 2. N-BEATS
-*   **Concept**: Pure Deep Learning architecture with no convolutions or recurrence.
-*   **Key Tech**: Stack of blocks for Trend (polynomial) and Seasonality (Fourier).
-*   **Why it wins**: Interpretable decomposition of the signal.
+**RMSE: 0.612 | R²: 0.321 | Parameters: 1.1M**
 
-### 3. WaveNet
-*   **Concept**: Adapted from DeepMind's audio generation model.
-*   **Key Tech**: **Gated Activations** (`tanh * sigmoid`) acting as information filters.
-*   **Why it wins**: Filters out noise very effectively.
+```
+Architecture:
+├── Input Layer (60 timesteps × 33 features)
+├── Instance Normalization (RevIN)
+├── Patching (Stride=8, Len=16) -> (Numbers of patches)
+├── Channel Independence (Treat features separately)
+├── 3× Transformer Encoder Blocks
+│   ├── Multi-Head Attention (Head Dim=128)
+│   ├── Feed Forward Network
+│   └── Residual + Norm
+├── Flatten Head
+└── Output (1 value)
+```
 
-### 4. TCN (Temporal Convolutional Network)
-*   **Concept**: "ResNet for Time Series".
-*   **Key Tech**: Causal Dilated Convolutions + Residual Connections + Spatial Dropout.
-*   **Why it wins**: Incredible stability and huge receptive field (125 steps).
+**Key Features:** RevIN handles distribution shifts. Patching captures local semantic patterns. Channel independence reduces overfitting.
 
-### 5. Transformer
-*   **Concept**: Physics-aware Attention mechanism.
-*   **Key Tech**: Pre-LayerNorm config + Multi-Head Self-Attention.
-*   **Why it wins**: Finds correlations between distant time points.
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/patchtst/predictions.png" alt="PatchTST Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/patchtst/training_curves.png" alt="PatchTST Training" width="100%"/>
+</td>
+</tr>
+</table>
 
-*(Legacy models like ConvLSTM/TFT were evaluated and removed due to lower efficiency).*
+<img src="outputs/figures/patchtst/error_analysis.png" alt="PatchTST Error Analysis" width="100%"/>
+
+---
+
+### 🥈 N-BEATS (Neural Basis Expansion)
+
+**RMSE: 0.625 | R²: 0.294 | Parameters: 17.5M**
+
+```
+Architecture:
+├── Input Layer (60 timesteps)
+├── Stack 1: Trend Block
+│   ├── 4× Fully Connected Layers (256 units)
+│   ├── Polynomial Basis Expansion
+│   └── Forecast/Backcast split
+├── Stack 2: Seasonality Block
+│   ├── 4× Fully Connected Layers (256 units)
+│   ├── Fourier Basis Expansion
+│   └── Forecast/Backcast split
+└── Global Sum of Forecasts
+```
+
+**Key Features:** Interpretable decomposition of signal into Trend and Seasonality. No RNN/CNN - pure deep learning.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/nbeats/predictions.png" alt="N-BEATS Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/nbeats/training_curves.png" alt="N-BEATS Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+<img src="outputs/figures/nbeats/error_analysis.png" alt="N-BEATS Error Analysis" width="100%"/>
+
+---
+
+### 🥉 Transformer (Tiny)
+
+**RMSE: 0.631 | R²: 0.285 | Parameters: 2.1M**
+
+```
+Architecture:
+├── Input (60 timesteps)
+├── Positional Encoding
+├── 4× Encoder Layers
+│   ├── Pre-LayerNorm
+│   ├── Multi-Head Self-Attention (4 heads)
+│   ├── Dropout (0.1)
+│   └── Feed Forward (Dim=128)
+├── Global Average Pooling
+└── MLP Head
+```
+
+**Key Features:** Pre-LayerNorm for training stability. Small embedding size (dim=32) prevents overfitting.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/transformer/predictions.png" alt="Transformer Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/transformer/training_curves.png" alt="Transformer Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+### 4️⃣ WaveNet (Tiny)
+
+**RMSE: 0.645 | R²: 0.254 | Parameters: 0.6M**
+
+```
+Architecture:
+├── Input (60 timesteps)
+├── Causal Conv1D (32 filters)
+├── 8× Gated Blocks (Dilations: 1, 2, 4, 8)
+│   ├── Tanh (Feature) * Sigmoid (Gate)
+│   ├── Skip Connection
+│   └── Residual
+├── ReLU -> Conv1D -> ReLU
+└── Output
+```
+
+**Key Features:** Gated activations filter noise. Exponential dilation sees full history efficiently.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/wavenet/predictions.png" alt="WaveNet Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/wavenet/training_curves.png" alt="WaveNet Training" width="100%"/>
+</td>
+</tr>
+</table>
+
+---
+
+### 5️⃣ TCN (Tiny Temporal Convolutional Network)
+
+**RMSE: 0.652 | R²: 0.241 | Parameters: 0.5M**
+
+```
+Architecture:
+├── Input
+├── 6× Residual Blocks
+│   ├── Dilated Causal Conv1D (Kernel=3)
+│   ├── Weight Norm + Dropout (0.2)
+│   └── 1x1 Conv Residual
+├── Global Max Pooling
+└── Dense Head
+```
+
+**Key Features:** "ResNet for Time Series". Large receptive field with minimal parameters.
+
+<table>
+<tr>
+<td width="50%">
+<img src="outputs/figures/tcn/predictions.png" alt="TCN Predictions" width="100%"/>
+</td>
+<td width="50%">
+<img src="outputs/figures/tcn/training_curves.png" alt="TCN Training" width="100%"/>
+</td>
+</tr>
+</table>
 
 ---
 
